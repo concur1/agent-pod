@@ -17,6 +17,8 @@
 ## Config & profiles
 
 - [ ] make the agent name and email for git configrable.
+- [ ] research profile: create one (e.g. an example `research:` profile — agent + context files for web-research work, alongside `audit`/`daily` in the docs)
+- [ ] allow configuring the agent's JSON settings inline in a profile (a `settings:` dict), not just via a `settings_file` host path
 - [ ] per-profile flake overrides: profiles only allow run-level keys (agent, context_files, files, extra_args, settings_file) — add `allow_unfree`, `permitted_insecure`, `extra_packages` to ProfileConfig so a profile can build with unfree/insecure gates open
 - [x] ~~config options for allow_unfree / allow_vulnerabilities~~ — done: `allow_unfree` + `permitted_insecure` (version-pinned, default-deny), see README
 - [ ] ADR on how profile settings merge: should profiles be self-contained, or inherit settings from elsewhere?
