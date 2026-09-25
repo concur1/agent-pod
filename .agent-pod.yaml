@@ -7,6 +7,15 @@ profile: default
 profiles:
   default:
     agent: pi
+  claude:
+    agent: claude
+  skills:
+    agent: pi
+    files:
+      - source: ~/.agent/skills
+        name: skills
+        permissions: rw
+        description: host skills dir (read/write; writes flow back to host)
 ephemeral: true
 extra_packages:
 - uv
