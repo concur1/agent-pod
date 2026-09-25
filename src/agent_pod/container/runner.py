@@ -523,7 +523,10 @@ def _podman_command(
         "--name",
         instance_name,
         "-w",
-        (internal_env or {}).get("AP_WORKTREE", "/sandbox"),
+        # Podman rejects a workdir that doesn't exist in the container yet, and
+        # the ephemeral worktree path is created by the entrypoint only after
+        # startup; the entrypoint `cd`s into it itself. /sandbox always exists.
+        "/sandbox",
     ]
 
     if use_bash:

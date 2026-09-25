@@ -845,7 +845,10 @@ class TestRunAgentEphemeral:
         # the instance, so concurrent sessions on one repo never collide on a
         # single shared path.
         assert "AP_WORKTREE=/sandbox/pi-sandbox-instance-crisp-lamp" in envs
-        assert args[args.index("-w") + 1] == "/sandbox/pi-sandbox-instance-crisp-lamp"
+        # Start in the always-present /sandbox; the entrypoint `cd`s into the
+        # per-session worktree after creating it (podman rejects a missing
+        # workdir).
+        assert args[args.index("-w") + 1] == "/sandbox"
         head = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True
         ).stdout.strip()
