@@ -167,6 +167,53 @@ def _gitconfig_seed() -> str:
     return _GITCONFIG_SAFE + "\n" + _git_user_block()
 
 
+def _mainline_branch(cwd: Path) -> str | None:
+    """The local mainline branch ('main', else 'master'); None if neither exists.
+
+    None means "don't prune": without a mainline to compare against we never
+    delete a session branch.
+    """
+    for name in ("main", "master"):
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(cwd), "rev-parse", "--verify", "--quiet", f"refs/heads/{name}"],
+                capture_output=True,
+                text=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return None
+        if result.returncode == 0:
+            return name
+    return None
+
+
+def prune_matching_branch(cwd: Path, branch: str) -> bool:
+    """Delete `branch` when it adds no commits to the mainline.
+
+    A branch whose tip is an ancestor of the mainline carries no work beyond it
+    (never committed, or its commits mostly were folded back), so it's a no-op
+    session branch safe to drop; branches with unique commits stay for review.
+    Returns True if the branch was deleted.
+    """
+    mainline = _mainline_branch(cwd)
+    if mainline is None:
+        return False
+    try:
+        contained = subprocess.run(
+            ["git", "-C", str(cwd), "merge-base", "--is-ancestor", branch, mainline],
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+    if contained.returncode != 0:
+        return False
+    deleted = subprocess.run(
+        ["git", "-C", str(cwd), "branch", "-D", branch], capture_output=True, text=True
+    )
+    return deleted.returncode == 0
+
+
 def _git_head_commit(cwd: Path) -> str | None:
     """The repo's current HEAD commit id; None outside a repo or on an unborn HEAD."""
     try:
@@ -671,13 +718,15 @@ def run_agent(
         # Drop this session's worktree registration from the repo's .git. Its
         # gitdir points at the container-only /sandbox/<instance> path, so
         # targeted `remove --force` on that one path leaves any other live
-        # session's worktree alone. The agent branch itself stays for review.
+        # session's worktree alone. A branch that adds nothing to main is then
+        # pruned; unique work stays for review.
         if ephemeral_repo is not None:
+            repo = Path.cwd()
             subprocess.run(
                 [
                     "git",
                     "-C",
-                    str(Path.cwd()),
+                    str(repo),
                     "worktree",
                     "remove",
                     "--force",
@@ -686,6 +735,7 @@ def run_agent(
                 capture_output=True,
                 text=True,
             )
+            prune_matching_branch(repo, ephemeral_repo.branch)
 
 
 def _run_podman(command: list[str], instance_name: str) -> None:

@@ -9,7 +9,12 @@ import pytest
 
 from agent_pod.config import get_agent_config, get_effective_agent_config
 from agent_pod.container.cleanup import cleanup_stale_container, container_running
-from agent_pod.container.runner import _run_podman, ensure_host_paths, run_agent
+from agent_pod.container.runner import (
+    _run_podman,
+    ensure_host_paths,
+    prune_matching_branch,
+    run_agent,
+)
 from agent_pod.types import FileMount
 from agent_pod.utils.names import get_instance_name
 
@@ -906,6 +911,129 @@ class TestRunAgentEphemeral:
         assert not any(a.endswith(":/repo/.git:rw,z") for a in args)
         envs = {args[i + 1] for i, a in enumerate(args) if a == "-e"}
         assert not any(e.startswith("AP_BRANCH=") for e in envs)
+
+
+class TestPruneSessionBranch:
+    """A closed session's branch is pruned when it adds no commits to main."""
+
+    def _make_repo(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        for cmd in (
+            ["git", "-C", str(repo), "init", "-b", "main"],
+            ["git", "-C", str(repo), "config", "user.name", "test"],
+            ["git", "-C", str(repo), "config", "user.email", "t@t"],
+        ):
+            subprocess.run(cmd, check=True, capture_output=True)
+        (repo / "f.txt").write_text("one\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "init"], check=True, capture_output=True
+        )
+        return repo
+
+    def _branches(self, repo):
+        out = subprocess.run(
+            ["git", "-C", str(repo), "for-each-ref", "--format=%(refname:short)", "refs/heads/"],
+            capture_output=True,
+            text=True,
+        ).stdout
+        return set(out.splitlines())
+
+    def _patch_prereqs(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
+        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
+        monkeypatch.setattr(
+            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
+        )
+
+    def test_prunes_branch_equal_to_main(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+        subprocess.run(["git", "-C", str(repo), "branch", "agent/default/sesh"])
+
+        assert prune_matching_branch(repo, "agent/default/sesh") is True
+        assert "agent/default/sesh" not in self._branches(repo)
+
+    def test_prunes_branch_behind_main(self, tmp_path):
+        """Main moved on, but the branch never gained commits: still a no-op branch."""
+        repo = self._make_repo(tmp_path)
+        subprocess.run(["git", "-C", str(repo), "branch", "agent/default/sesh"])
+        (repo / "f.txt").write_text("two\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "next"], check=True, capture_output=True
+        )
+
+        assert prune_matching_branch(repo, "agent/default/sesh") is True
+        assert "agent/default/sesh" not in self._branches(repo)
+
+    def test_keeps_branch_with_unique_commit(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+        subprocess.run(["git", "-C", str(repo), "switch", "-c", "agent/default/work"])
+        (repo / "f.txt").write_text("work\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "work"], check=True, capture_output=True
+        )
+        subprocess.run(["git", "-C", str(repo), "switch", "main"])
+
+        assert prune_matching_branch(repo, "agent/default/work") is False
+        assert "agent/default/work" in self._branches(repo)
+
+    def test_keeps_branch_without_mainline(self, tmp_path):
+        """No main/master to compare against: never delete anything."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        for cmd in (
+            ["git", "-C", str(repo), "init", "-b", "dev"],
+            ["git", "-C", str(repo), "config", "user.name", "test"],
+            ["git", "-C", str(repo), "config", "user.email", "t@t"],
+        ):
+            subprocess.run(cmd, check=True, capture_output=True)
+        (repo / "f.txt").write_text("one\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "init"], check=True, capture_output=True
+        )
+        subprocess.run(["git", "-C", str(repo), "branch", "agent/default/sesh"])
+
+        assert prune_matching_branch(repo, "agent/default/sesh") is False
+        assert "agent/default/sesh" in self._branches(repo)
+
+    def test_keeps_branch_that_does_not_exist(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+        assert prune_matching_branch(repo, "agent/default/ghost") is False
+
+    def test_run_agent_prunes_noop_branch_on_exit(self, tmp_path, monkeypatch):
+        """Closing a session that left the branch at main (no commits) drops it."""
+        repo = self._make_repo(tmp_path)
+        subprocess.run(["git", "-C", str(repo), "branch", "agent/fixes/crisp-lamp"])
+        self._patch_prereqs(tmp_path, monkeypatch)
+        _capture_run(monkeypatch)
+        monkeypatch.chdir(repo)
+
+        with pytest.raises(SystemExit):
+            run_agent("pi", [], ephemeral=True, session="crisp-lamp", profile="fixes")
+
+        assert "agent/fixes/crisp-lamp" not in self._branches(repo)
+
+    def test_run_agent_keeps_branch_with_commits_on_exit(self, tmp_path, monkeypatch):
+        """Closing a session with unique commits leaves its branch for review."""
+        repo = self._make_repo(tmp_path)
+        subprocess.run(["git", "-C", str(repo), "switch", "-c", "agent/fixes/crisp-lamp"])
+        (repo / "f.txt").write_text("work\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "work"], check=True, capture_output=True
+        )
+        self._patch_prereqs(tmp_path, monkeypatch)
+        _capture_run(monkeypatch)
+        monkeypatch.chdir(repo)
+
+        with pytest.raises(SystemExit):
+            run_agent("pi", [], ephemeral=True, session="crisp-lamp", profile="fixes")
+
+        assert "agent/fixes/crisp-lamp" in self._branches(repo)
 
 
 class TestRunningDirectlyInSandbox:
