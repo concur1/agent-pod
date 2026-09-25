@@ -244,7 +244,10 @@ class TestGetEffectiveAgentConfig:
         config = get_effective_agent_config("pi")
         assert config.files[-1].name == "tools"
         # pi's own writable state (auth.json, sessions) is still present.
-        assert any(f.name == "auth.json" and f.seed for f in config.files)
+        assert any(
+            f.name == "auth.json" and not f.seed and f.permissions == "rw"
+            for f in config.files
+        )
 
     def test_bad_type_fails_validation(self, isolated_paths):
         _write(

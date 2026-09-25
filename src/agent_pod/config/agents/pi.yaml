@@ -38,14 +38,13 @@ files:
     name: models-store.json
     permissions: ro
     description: "Your pi models store (host mirror)"
-  # Writable state seeded from the host on first run; the host file is never
-  # modified. trust.json records tool approvals.
+  # Host auth bound directly read/write (no seeded copy), so pi logins persist
+  # straight back to the host file. trust.json records tool approvals.
   - source: ~/.pi/agent/auth.json
     name: auth.json
     permissions: rw
-    seed: true
     secret: true
-    description: "pi auth (seeded)"
+    description: "pi auth (host passthrough)"
   - name: trust.json
     permissions: rw
     description: "pi tool approvals (state)"
