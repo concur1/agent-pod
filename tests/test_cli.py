@@ -82,13 +82,15 @@ class TestMainArgparse:
         assert args[0] == "claude"
 
     @patch("builtins.print")
-    def test_list_subcommand_no_profiles_lists_agents(self, mock_print, no_config):
+    def test_list_subcommand_lists_default_profile(self, mock_print, no_config):
+        # `ap list` always shows the `default` profile (the baseline config),
+        # not agents — those are `ap list --agents` territory.
         with patch.object(sys, "argv", ["ap", "list"]):
             main()
         output = " ".join(str(call) for call in mock_print.call_args_list)
-        assert "No profiles configured" in output
-        assert "pi" in output
-        assert "opencode" in output
+        assert "Configured Profiles" in output
+        assert "- default" in output
+        assert "No profiles configured" not in output
 
     @patch("builtins.print")
     def test_list_agents_subcommand(self, mock_print, no_config):
@@ -98,6 +100,23 @@ class TestMainArgparse:
         assert "Configured Agents" in output
         assert "pi" in output
         assert "opencode" in output
+
+    @patch("builtins.print")
+    def test_list_subcommand_default_profile_shows_agent(self, mock_print, tmp_path, monkeypatch):
+        """The default profile's summary reflects its effective agent — including
+        when the agent is set inside a `profiles: {default: …}` block."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        (tmp_path / ".agent-pod.yaml").write_text(
+            "profile: default\nprofiles:\n  default:\n    agent: pi\n"
+        )
+        with patch.object(sys, "argv", ["ap", "list"]):
+            main()
+        out = " ".join(str(call) for call in mock_print.call_args_list)
+        assert "default (active)" in out
+        assert "agent=pi" in out
+        # The profiles.default key is not repeated as a named profile.
+        assert out.count("- default") == 1
 
     @patch("builtins.print")
     def test_list_subcommand_lists_profiles(self, mock_print, tmp_path, monkeypatch):
@@ -116,6 +135,8 @@ class TestMainArgparse:
         with patch.object(sys, "argv", ["ap", "list"]):
             main()
         out = " ".join(str(call) for call in mock_print.call_args_list)
+        # The default profile row always precedes the named ones.
+        assert out.index("- default") < out.index("- fixes")
         assert "fixes (active)" in out
         assert "agent=pi" in out
         assert "--no-approval" in out
@@ -560,6 +581,32 @@ class TestRunProfiles:
     def _write_config(self, tmp_path, text):
         (tmp_path / ".agent-pod.yaml").write_text(text)
         return tmp_path
+
+    @patch("agent_pod.cli.humanized_id", return_value="crisp-lamp")
+    @patch("agent_pod.cli.run_agent")
+    def test_default_profile_resolves_agent(
+        self, mock_run_agent, mock_humanized, tmp_path, monkeypatch
+    ):
+        """`.agent-pod.yaml` profile-centric shape: `profile: default` + a
+        `profiles.default` block carrying the agent — `ap run` gets the agent
+        from the active profile, not the top level."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        self._write_config(
+            tmp_path,
+            "profile: default\n"
+            "profiles:\n"
+            "  default:\n"
+            "    agent: pi\n"
+            "ephemeral: false\nextra_packages: [uv]\n",
+        )
+        with patch.object(sys, "argv", ["ap", "run"]):
+            main()
+        args, kwargs = mock_run_agent.call_args
+        assert args[0] == "pi"
+        assert kwargs["profile"] == "default"
+        assert kwargs["session"] == "crisp-lamp"
+        assert kwargs["ephemeral"] is False
 
     @patch("agent_pod.cli.humanized_id", return_value="crisp-lamp")
     @patch("agent_pod.cli.run_agent")

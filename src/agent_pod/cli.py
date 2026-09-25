@@ -280,21 +280,36 @@ def _list_agents() -> None:
 
 
 def _list_profiles() -> None:
-    """List configured profiles: the profile name, active marker, and overrides."""
+    """List configured profiles: the `default` profile plus any named ones.
+
+    The `default` profile always exists (its settings are the config's baseline
+    run options); named profiles are run-level overrides on top of it. The
+    active profile — the config's `profile:` key, else `default` — is marked.
+    `ap list --agents` lists the supported agents instead.
+    """
     user_cfg = get_user_config()
-    if not user_cfg.profiles:
-        print(
-            "No profiles configured. `ap run` uses the 'agent' in your config; "
-            "define a `profiles:` block to add named profiles "
-            "(see agent-pod.example.yaml)."
-        )
-        _list_agents()
-        return
     active = user_cfg.profile or DEFAULT_PROFILE
     print("Configured Profiles:")
-    for name in sorted(user_cfg.profiles):
+    marker = " (active)" if active == DEFAULT_PROFILE else ""
+    print(f"  - {DEFAULT_PROFILE}{marker}{_default_profile_summary(user_cfg)}")
+    for name in sorted(p for p in user_cfg.profiles if p != DEFAULT_PROFILE):
         marker = " (active)" if name == active else ""
         print(f"  - {name}{marker}{_profile_summary(user_cfg.profiles[name])}")
+
+
+def _default_profile_summary(user_cfg: UserConfig) -> str:
+    """Compact summary of the `default` profile's effective run settings.
+
+    The config's top-level run keys are the baseline; a `profiles: {default: …}`
+    block (if any) overlays them per key, mirroring how `_effective_user_config`
+    resolves the active profile.
+    """
+    fields = ("agent", "context_files", "files", "extra_args", "settings_file")
+    data = {f: getattr(user_cfg, f) for f in fields if getattr(user_cfg, f) is not None}
+    overlay = user_cfg.profiles.get("default")
+    if overlay:
+        data.update({k: v for k, v in overlay.model_dump(exclude_none=True).items() if k in fields})
+    return _profile_summary(ProfileConfig.model_validate(data))
 
 
 def _profile_summary(profile: ProfileConfig) -> str:
