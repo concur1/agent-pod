@@ -1,0 +1,128 @@
+# agent-pod user config example.
+#
+# Instead of writing this by hand, `ap init` generates a barebones version
+# interactively (and `ap run` auto-starts it on first use); extend the file
+# it creates with the options below as needed.
+#
+# Copy this to ~/.config/container-agents/config.yaml (global) or
+# ./.agent-pod.yaml (per-project) and edit. Every key is optional; unset values
+# fall back to the bundled agent config / CLI defaults. Precedence:
+#
+#   bundled agent config  <  global config  <  project config  <  CLI flags
+#
+# Merge semantics: dicts (flake, tmpfs_mounts) merge key-by-key; lists
+# and scalars are replaced — EXCEPT `files`, which is APPENDED to the bundled
+# agent's list so your entries are added without dropping the agent's own.
+
+# Default agent for `ap run`/`build`/`sessions` when none is given on the CLI.
+# agent: opencode
+
+# Run-flag defaults (any of these may be omitted).
+# session: dev
+#   (removed — bashing in is now `ap shell`, not a config flag)
+# ephemeral: true
+#   Ephemeral git sessions (default false). In a git repo with at least one
+#   commit, `true` mounts the repo's `.git` read-write at /repo/.git and the
+#   container creates its own per-session worktree at /sandbox on branch
+#   agent/<profile>/<session> (forked from your current HEAD). Only committed
+#   files ever reach the host — uncommitted/untracked work stays in the pod —
+#   and the host working tree is never touched. `false` (or not a git repo)
+#   mounts your working directory directly at /sandbox as before.
+# context_files:
+#   - docs/notes.md
+#   - docs/api.md:api.md
+# settings_file: ~/.pi/settings.json
+# extra_args: [--model, sonnet]
+
+# Named profiles (`ap list` shows them; `ap run <profile>` uses one).
+# Each is a set of run-level overrides; unset fields inherit the top level.
+# Ideas:
+#
+#   readonly — locked down: use a different (cheaper/reviewer) agent for
+#              read-only review work.
+#   grunt    — a different agent (or cheaper model) for mechanical work.
+#   audit    — plan/review heavy: read-only context docs.
+#   skills   — read/write access to the skills dir for authoring/installing
+#              skills: the host ~/.agent/skills is seeded into session state on
+#              first run and the *copy* (not the host) is mounted read/write,
+#              so new skills persist across runs of this profile without ever
+#              touching the host dir.
+#
+# Note: profiles tune run options plus per-profile `files` mounts. `files`
+# entries append after the top-level user `files`, and a later mount at the
+# same container path replaces an earlier one — that's how `skills` here flips
+# the bundled read-only ~/.agent/skills mount to read/write. (For writes to
+# flow straight back to the host, drop `seed: true`.) Networking egress per
+# profile is still not expressible.
+# profile: readonly
+# profiles:
+#   readonly:
+#     agent: pi
+#     extra_args: [--diff, --no-approval]
+#   grunt:
+#     agent: opencode
+#     extra_args: [--model, fast]
+#   audit:
+#     agent: claude
+#     context_files: [docs/spec.md, docs/api.md:api.md]
+#   skills:
+#     agent: pi
+#     files:
+#       - source: ~/.agent/skills
+#         name: skills
+#         permissions: rw
+#         seed: true
+#         description: your skills dir (seeded copy; writes kept in session state)
+
+# Agent-config overrides — flat top-level keys, applied to whichever agent is
+# run. A bare string is accepted as a one-item list. extra_packages names are
+# raw nixpkgs attributes (e.g. uv, nodejs_22). allow_unfree / permitted_insecure
+# are nixpkgs safety gates (insecure is default-deny).
+# extra_packages: uv
+# allow_unfree: false
+# permitted_insecure: []
+
+# flake:
+#   attr: opencode
+# image_tag: localhost/opencode-sandbox:latest
+# container_name: opencode-sandbox-instance
+# container_home: /root/.config/opencode
+# tmpfs_mounts:
+#   /tmp: rw,exec,size=512m
+# passthrough_envs: [MY_API_KEY]
+
+# Files/dirs to add to the sandbox, in addition to the agent's own `files`.
+# Each entry:
+#   source      — host file/folder, or a `builtin:` generator (`builtin:instructions`,
+#                 `builtin:git-workflow`); omit for a writable state file/dir
+#                 with no host seed.
+#   name        — mount name; container path defaults to <container_home>/<name>.
+#   permissions — ro | rw
+#   description — shown by `ap plan` (optional).
+#   target      — absolute container path override (optional; defaults above).
+#   optional    — skip silently if the host `source` is missing (optional).
+#   seed        — rw files: copy the host `source` into session state on first
+#                 run and mount the copy, never touching the host (optional).
+#   secret      — flag as [secret] in `ap plan` (optional).
+#   type        — file | dir for writable state entries (optional; inferred).
+#   context     — true: mount read-only into the shared contexts dir and
+#                 @-reference it in instructions + pi args. This is the generic
+#                 form of `context_files:` / `--context-file` (which are sugar).
+# files:
+#   - source: ~/dotfiles/aliases.sh
+#     name: .bashrc.d/aliases.sh
+#     permissions: ro
+#     description: shared aliases
+#   - source: ./docs/spec.md
+#     name: spec.md
+#     context: true
+#     description: spec shown to every agent run
+#   - source: ~/.config/myagent/config.json
+#     name: config.json
+#     permissions: rw
+#     seed: true
+#     secret: true
+#     description: myagent credentials
+#   - name: scratch
+#     permissions: rw
+#     description: scratch area (writable state dir)

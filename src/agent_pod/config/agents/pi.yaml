@@ -1,0 +1,62 @@
+# Pi coding agent — content comes from the flake; runtime from agent-pod.
+flake:
+  dir: config/agents/pi        # dir with flake.nix + flake.lock
+
+image_tag: localhost/pi-sandbox:latest
+container_name: pi-sandbox-instance
+container_home: /root/.pi/agent
+# Every file/dir supplied to the sandbox lives in `files`; mount order follows
+# list order. Host config is mirrored read-only (no stale seeded copy); only
+# pi-owned writable state is persisted, seeded from the host on first run.
+files:
+  # Your global skills dir (~/.agent/skills/<name>/SKILL.md) mounted read-only.
+  - source: ~/.agent/skills
+    name: skills
+    permissions: ro
+    optional: true
+    description: "Your global skills dir (host passthrough)"
+  # agent-pod's git-workflow skill, generated at runtime.
+  - source: builtin:git-workflow
+    name: skills/git-workflow.md
+    permissions: ro
+    description: "git-workflow skill (from agent-pod)"
+  # Generated global instruction file (AGENTS.md) auto-loaded by pi.
+  - source: builtin:instructions
+    name: AGENTS.md
+    permissions: ro
+    description: "Generated global agent instructions"
+  # Host config mirrored read-only (no stale seeded copy).
+  - source: ~/.pi/settings.json
+    name: settings.json
+    permissions: ro
+    description: "Your pi settings (host mirror)"
+  - source: ~/.pi/agent/models.json
+    name: models.json
+    permissions: ro
+    description: "Your pi models (host mirror)"
+  - source: ~/.pi/agent/models-store.json
+    name: models-store.json
+    permissions: ro
+    description: "Your pi models store (host mirror)"
+  # Writable state seeded from the host on first run; the host file is never
+  # modified. trust.json records tool approvals.
+  - source: ~/.pi/agent/auth.json
+    name: auth.json
+    permissions: rw
+    seed: true
+    secret: true
+    description: "pi auth (seeded)"
+  - name: trust.json
+    permissions: rw
+    description: "pi tool approvals (state)"
+  - name: sessions
+    permissions: rw
+    description: "pi sessions (state)"
+tmpfs_mounts:
+  /tmp: rw,exec,size=512m
+# pi extensions/packages are now baked at BUILD time on the flake path (settings.json
+# + `pi install --approve`), so startup skips re-installing them (buildah layer cache).
+# Session seeds still come from the host at runtime; the baked /root/.pi/agent/npm is
+# not volume-mounted, so pre-installed extensions persist across the host settings seed.
+# No env vars are forwarded by default (e.g. HF_TOKEN); opt in with
+# `passthrough_envs` in your own config if you need them.

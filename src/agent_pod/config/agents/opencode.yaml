@@ -1,0 +1,57 @@
+# Opencode agent — content comes from the flake; runtime from agent-pod.
+flake:
+  dir: config/agents/opencode        # dir with flake.nix + flake.lock
+
+image_tag: localhost/opencode-sandbox:latest
+container_name: opencode-sandbox-instance
+container_home: /root/.config/opencode
+# Every file/dir supplied to the sandbox lives in `files`; mount order follows
+# list order (a directory entry before a file nested inside it wins for that
+# path). Host mirrors are read-only so the sandbox always reflects the host.
+files:
+  # Your global skills dir (~/.agent/skills/<name>/SKILL.md) mounted read-only.
+  # `optional` skips silently when the host dir is absent.
+  - source: ~/.agent/skills
+    name: skills
+    permissions: ro
+    optional: true
+    description: "Your global skills dir (host passthrough)"
+  # agent-pod's git-workflow skill, generated at runtime. Mounted after the
+  # skills dir so it wins for that exact path if the host also defines one.
+  - source: builtin:git-workflow
+    name: skills/git-workflow/SKILL.md
+    permissions: ro
+    description: "git-workflow skill (from agent-pod)"
+  # Generated global instruction file (AGENTS.md) auto-loaded by opencode.
+  - source: builtin:instructions
+    name: AGENTS.md
+    permissions: ro
+    description: "Generated global agent instructions"
+  # Host config mirrored read-only (no stale seeded copy).
+  - source: ~/.config/opencode/opencode.json
+    name: opencode.json
+    permissions: ro
+    description: "Your opencode config (host mirror)"
+  # Writable credentials seeded from the host on first run; the host file is
+  # never modified (the copy lives in the session state dir).
+  - source: ~/.local/share/opencode/auth.json
+    name: auth.json
+    target: /root/.local/share/opencode/auth.json
+    permissions: rw
+    seed: true
+    secret: true
+    description: "opencode credentials (seeded)"
+  # Writable state dirs for opencode's own runtime state.
+  - name: history
+    permissions: rw
+    description: "opencode history (state)"
+  - name: storage
+    permissions: rw
+    description: "opencode storage (state)"
+tmpfs_mounts:
+  /root/.cache: rw,exec,size=512m
+  /tmp: rw,exec,size=512m
+# No env vars are forwarded by default. If you need API keys (e.g. via
+# apiKey: "{env:YOUR_TOKEN}" in opencode.json), opt in with
+# `passthrough_envs` in your own config; vars are forwarded only when set in
+# the launching shell.

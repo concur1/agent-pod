@@ -1,0 +1,35 @@
+# Claude Code agent — content comes from the flake; runtime from agent-pod.
+flake:
+  dir: config/agents/claude        # dir with flake.nix + flake.lock
+
+image_tag: localhost/claude-sandbox:latest
+container_name: claude-sandbox-instance
+container_home: /root/.claude
+# Every file/dir supplied to the sandbox lives in `files`; mount order follows
+# list order.
+files:
+  # Your global skills dir (~/.agent/skills/<name>/SKILL.md) mounted read-only.
+  - source: ~/.agent/skills
+    name: skills
+    permissions: ro
+    optional: true
+    description: "Your global skills dir (host passthrough)"
+  # Generated global instruction file (CLAUDE.md), always mounted at the
+  # container home so it loads regardless of where the repo's own CLAUDE.md
+  # sits.
+  - source: builtin:instructions
+    name: CLAUDE.md
+    permissions: ro
+    description: "Generated global agent instructions"
+  # Writable state for claude's own runtime.
+  - name: config.json
+    permissions: rw
+    description: "claude config (state)"
+  - name: history
+    permissions: rw
+    description: "claude history (state)"
+tmpfs_mounts:
+  /root/.cache: rw,exec,size=512m
+  /tmp: rw,exec,size=512m
+# No env vars are forwarded by default (e.g. ANTHROPIC_API_KEY); opt in with
+# `passthrough_envs` in your own config if you need them.
