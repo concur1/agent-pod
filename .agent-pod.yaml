@@ -3,7 +3,7 @@
 # and CLI defaults. See agent-pod.example.yaml for the full list of options.
 agent: pi
 context_files: []
-ephemeral: false
+ephemeral: true
 extra_packages:
 - uv
 - ty
