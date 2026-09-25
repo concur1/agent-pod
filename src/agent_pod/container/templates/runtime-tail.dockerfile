@@ -12,6 +12,9 @@ RUN cat > /usr/local/bin/agent-pod-entrypoint <<'SH'
 #!/bin/sh
 set -eu
 if [ -n "${AP_BRANCH:-}" ]; then
+  # Drop dead worktree registrations (a crashed session can leave one at the
+  # stale /sandbox path, which `add` refuses) before adding our own.
+  git --git-dir=/repo/.git worktree prune
   git --git-dir=/repo/.git worktree add -b "$AP_BRANCH" /sandbox "$AP_BASE" 2>/dev/null \
     || git --git-dir=/repo/.git worktree add /sandbox "$AP_BRANCH"
 fi

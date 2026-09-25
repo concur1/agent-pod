@@ -162,7 +162,13 @@ Two repo modes, selected by the user config's `ephemeral` field:
   work stays inside the pod. On exit `run_agent` runs a best-effort
   `git worktree prune` on the host to drop the worktree metadata the container
   wrote into `.git`; the `agent/<profile>/<session>` branch itself stays for
-  review.
+  review. If a session is killed hard (e.g. an OOM kill) so that exit-time prune
+  never runs, the stale `/sandbox` registration survives and makes a later
+  `worktree add` fail — `run_agent` therefore checks before launching whether
+  `/sandbox` is registered; if a pod for this agent is still running the
+  registration is a live session's and it errors with a clear message instead
+  of pruning it out from under the running pod, otherwise it prunes the dead
+  registration. The baked entrypoint prunes once more right before it adds.
 - **Direct (`false`, or not a git repo / no commits):** the working directory
   is mounted at `/sandbox` as before; no `AP_*` env, the entrypoint runs the
   agent directly.

@@ -204,6 +204,73 @@ def _ephemeral_env(repo: EphemeralRepo) -> dict[str, str]:
     }
 
 
+def _sandbox_worktree_registered(cwd: Path) -> bool:
+    """Whether a git worktree is registered at the ephemeral /sandbox path."""
+    out = subprocess.run(
+        ["git", "-C", str(cwd), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    if out.returncode != 0:
+        return False
+    return any(
+        line.startswith("worktree ") and Path(line.split(maxsplit=1)[1]).name == "sandbox"
+        for line in out.stdout.splitlines()
+    )
+
+
+def _any_pod_running(container_name: str) -> bool:
+    """Whether any pod sharing this base container name is live.
+
+    Podman's name filter is a substring match, so `name=<base>` also catches
+    every session's container (`<base>-<session>`); the about-to-launch one
+    isn't running yet. Any podman failure reads as "none running" so a missing
+    podman or a blip never blocks a launch.
+    """
+    try:
+        out = subprocess.run(
+            ["podman", "ps", "--filter", f"name={container_name}", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return bool(out and out.strip())
+
+
+def _clear_stale_sandbox_worktree(container_name: str) -> None:
+    """Make the shared /sandbox worktree slot available before the container
+    entrypoint tries to `worktree add` it.
+
+    A crashed session leaves its container-created worktree registered at
+    /sandbox (its exit-time prune never ran), and git then refuses `worktree
+    add` at that path — the cryptic fatal. Only one pod can own the slot, so if
+    a pod for this agent is live, the registration belongs to it: fail loudly
+    rather than pruning a running session's worktree out from under it. With no
+    live pod the registration is dead debris; drop it and let the new
+    container re-add.
+    """
+    if not _sandbox_worktree_registered(Path.cwd()):
+        return
+    if _any_pod_running(container_name):
+        print(
+            "Error: another session's pod is already using this repo's /sandbox "
+            f"worktree (live pod '{container_name}'). Stop the running session first "
+            "(e.g. `ap sessions <agent> --rm <session>`) before relaunching.",
+            file=sys.stderr,
+        )
+        # ponytail: liveness check keys on this agent's base container name, so a
+        # concurrently running pod of a *different* agent could still be pruned.
+        # Agent-pod has no per-repo container label to key on; fine until that exists.
+        raise SystemExit(1)
+    subprocess.run(
+        ["git", "-C", str(Path.cwd()), "worktree", "prune"],
+        capture_output=True,
+        text=True,
+    )
+
+
 def ensure_host_paths(
     agent_name: str,
     config: AgentConfig,
@@ -608,6 +675,8 @@ def run_agent(
         cwd=Path.cwd(),
         branch=f"agent/{profile}/{session}",
     )
+    if ephemeral_repo is not None:
+        _clear_stale_sandbox_worktree(config.container_name)
     internal_env = _ephemeral_env(ephemeral_repo) if ephemeral_repo is not None else {}
 
     mounts = build_mounts(

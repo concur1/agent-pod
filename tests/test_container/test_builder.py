@@ -256,6 +256,9 @@ class TestGenerateRuntimeDockerfile:
         assert "git config --global user.name" in df
         # The ephemeral entrypoint forks the session worktree from AP_BASE.
         assert 'worktree add -b "$AP_BRANCH" /sandbox "$AP_BASE"' in df
+        # A crashed session leaves a stale /sandbox registration that blocks a
+        # re-add, so the entrypoint prunes dead registrations first.
+        assert "git --git-dir=/repo/.git worktree prune" in df
         # The environment is NOT in the Dockerfile: no nix tool RUNs, no apt,
         # no /opt staging. The flake's image is the source of truth.
         assert "nix --extra-experimental-features" not in df
