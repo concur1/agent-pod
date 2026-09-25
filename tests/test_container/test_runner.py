@@ -14,6 +14,7 @@ from agent_pod.container.runner import (
     ensure_host_paths,
     prune_matching_branch,
     run_agent,
+    tidy_noop_branches,
 )
 from agent_pod.types import FileMount
 from agent_pod.utils.names import get_instance_name
@@ -1009,6 +1010,9 @@ class TestPruneSessionBranch:
         repo = self._make_repo(tmp_path)
         subprocess.run(["git", "-C", str(repo), "branch", "agent/fixes/crisp-lamp"])
         self._patch_prereqs(tmp_path, monkeypatch)
+        # The launch sweep would prune this branch too; pin this test to the
+        # close-path prune it's named after.
+        monkeypatch.setattr("agent_pod.container.runner.tidy_noop_branches", lambda cwd: 0)
         _capture_run(monkeypatch)
         monkeypatch.chdir(repo)
 
@@ -1028,12 +1032,76 @@ class TestPruneSessionBranch:
         )
         self._patch_prereqs(tmp_path, monkeypatch)
         _capture_run(monkeypatch)
+        monkeypatch.setattr("agent_pod.container.runner.tidy_noop_branches", lambda cwd: 0)
         monkeypatch.chdir(repo)
 
         with pytest.raises(SystemExit):
             run_agent("pi", [], ephemeral=True, session="crisp-lamp", profile="fixes")
 
         assert "agent/fixes/crisp-lamp" in self._branches(repo)
+
+    def test_tidy_removes_noop_branches_keeps_work(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+        for name in ("agent/default/a", "agent/claude/b", "agent/default/c"):
+            subprocess.run(["git", "-C", str(repo), "branch", name])
+        subprocess.run(["git", "-C", str(repo), "switch", "-c", "agent/default/work"])
+        (repo / "f.txt").write_text("work\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "work"], check=True, capture_output=True
+        )
+        subprocess.run(["git", "-C", str(repo), "switch", "main"])
+
+        assert tidy_noop_branches(repo) == 3
+        branches = self._branches(repo)
+        assert "agent/default/work" in branches
+        for name in ("agent/default/a", "agent/claude/b", "agent/default/c"):
+            assert name not in branches
+
+    def test_tidy_skips_checked_out_branch(self, tmp_path):
+        """A live session's branch is checked out in a worktree and survives."""
+        repo = self._make_repo(tmp_path)
+        live = tmp_path / "live-wt"
+        subprocess.run(
+            ["git", "-C", str(repo), "worktree", "add", "-b", "agent/default/live", str(live)],
+            check=True,
+            capture_output=True,
+        )
+
+        assert tidy_noop_branches(repo) == 0
+        assert "agent/default/live" in self._branches(repo)
+
+    def test_tidy_noop_without_mainline(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+        subprocess.run(["git", "-C", str(repo), "branch", "-m", "dev"])
+        subprocess.run(["git", "-C", str(repo), "branch", "agent/default/sesh"])
+
+        assert tidy_noop_branches(repo) == 0
+        assert "agent/default/sesh" in self._branches(repo)
+
+    def test_run_agent_tidies_legacy_branches_at_launch(self, tmp_path, monkeypatch):
+        """Launch sweeps leftover no-op branches; work branches survive."""
+        repo = self._make_repo(tmp_path)
+        subprocess.run(["git", "-C", str(repo), "branch", "agent/default/legacy"])
+        subprocess.run(["git", "-C", str(repo), "branch", "agent/claude/legacy"])
+        subprocess.run(["git", "-C", str(repo), "switch", "-c", "agent/default/keep"])
+        (repo / "f.txt").write_text("work\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "work"], check=True, capture_output=True
+        )
+        subprocess.run(["git", "-C", str(repo), "switch", "main"])
+        self._patch_prereqs(tmp_path, monkeypatch)
+        _capture_run(monkeypatch)
+        monkeypatch.chdir(repo)
+
+        with pytest.raises(SystemExit):
+            run_agent("pi", [], ephemeral=True)
+
+        branches = self._branches(repo)
+        assert "agent/default/legacy" not in branches
+        assert "agent/claude/legacy" not in branches
+        assert "agent/default/keep" in branches
 
 
 class TestRunningDirectlyInSandbox:

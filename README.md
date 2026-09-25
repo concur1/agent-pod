@@ -375,7 +375,10 @@ On exit the host runs a best-effort `git worktree prune` to drop the
 container-written worktree metadata from your `.git`; the `agent/` branch stays
 behind for review — unless it adds nothing to `main` (a no-op session, or one
 whose commits were already folded back), in which case it's pruned
-automatically. Explicit sessions resume by checking the same branch
+automatically, and each `ap run`/`ap shell` sweeps any leftover `agent/*`
+branches that add nothing to `main` before launching (so stragglers from a
+crashed or pre-pruning session don't accumulate). Explicit sessions resume by
+checking the same branch
 back out; auto sessions (fresh `adjective-noun` names) each fork their own
 branch from your then-current HEAD. The old host-side worktree management
 (`ap worktree keep|integrate`) is gone — to fold a session's branch into your

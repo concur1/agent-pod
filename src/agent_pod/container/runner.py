@@ -187,17 +187,8 @@ def _mainline_branch(cwd: Path) -> str | None:
     return None
 
 
-def prune_matching_branch(cwd: Path, branch: str) -> bool:
-    """Delete `branch` when it adds no commits to the mainline.
-
-    A branch whose tip is an ancestor of the mainline carries no work beyond it
-    (never committed, or its commits mostly were folded back), so it's a no-op
-    session branch safe to drop; branches with unique commits stay for review.
-    Returns True if the branch was deleted.
-    """
-    mainline = _mainline_branch(cwd)
-    if mainline is None:
-        return False
+def _delete_noop_branch(cwd: Path, branch: str, mainline: str) -> bool:
+    """Delete `branch` when its tip is an ancestor of `mainline`; True if deleted."""
     try:
         contained = subprocess.run(
             ["git", "-C", str(cwd), "merge-base", "--is-ancestor", branch, mainline],
@@ -212,6 +203,47 @@ def prune_matching_branch(cwd: Path, branch: str) -> bool:
         ["git", "-C", str(cwd), "branch", "-D", branch], capture_output=True, text=True
     )
     return deleted.returncode == 0
+
+
+def prune_matching_branch(cwd: Path, branch: str) -> bool:
+    """Delete `branch` when it adds no commits to the mainline.
+
+    A branch whose tip is an ancestor of the mainline carries no work beyond it
+    (never committed, or its commits were folded back), so it's a no-op session
+    branch safe to drop; branches with unique commits stay for review.
+    """
+    mainline = _mainline_branch(cwd)
+    if mainline is None:
+        return False
+    return _delete_noop_branch(cwd, branch, mainline)
+
+
+def tidy_noop_branches(cwd: Path) -> int:
+    """Prune leftover `agent/*` branches that add nothing to the mainline.
+
+    Sweeps what a crashed or legacy session never pruned on close. Live sessions
+    are untouched: their branch is checked out in a worktree, so `branch -D`
+    refuses it. Returns the number of branches deleted.
+    """
+    mainline = _mainline_branch(cwd)
+    if mainline is None:
+        return 0
+    try:
+        out = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(cwd),
+                "for-each-ref",
+                "--format=%(refname:short)",
+                "refs/heads/agent/",
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return 0
+    return sum(_delete_noop_branch(cwd, branch, mainline) for branch in out.stdout.splitlines())
 
 
 def _git_head_commit(cwd: Path) -> str | None:
@@ -652,6 +684,12 @@ def run_agent(
     prompts_dir.mkdir(parents=True, exist_ok=True)
 
     cleanup_stale_container(instance_name)
+
+    # Leftover agent branches from crashed or legacy sessions accumulate; sweep
+    # no-op ones before launching. Live sessions' branches are checked out and
+    # can't be deleted, so this never disturbs an active session.
+    tidy_noop_branches(Path.cwd())
+
     build_image(agent_name, config, settings_file)
 
     # Ephemeral git mode: mount the repo's .git and let the container create its
