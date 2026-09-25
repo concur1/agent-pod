@@ -26,6 +26,7 @@
 ## Features
 
 - [ ] review/merge-conflict feature = a bundled profile, not new code — a `review` profile that uses profile→agent to pick the harness and mounts a review/merge-instructions context file (reuses builtin:git-workflow skill). Deliver: (a) review prompt file, (b) example `review:` profile in the docs/init, (c) test `ap run review` against a repo with conflicts
+- [ ] analytics agent = a bundled profile, not new code — a profile that mounts session state read-only (`~/.config/container-agents/<agent>/<session>/` state dirs + `agent/<profile>/<session>` branches) and a prompt file to cluster recurring errors from transcripts. Deliver: (a) analyst prompt file, (b) example `analytics:` profile in docs/init, (c) session-log capture — today only pi's `sessions` state dir persists; `ap` never logs the agent's terminal output, so verify/capture transcripts across all agents before the analyst has anything to read
 - [ ] pi extensions in a named volume to improve startup time? — open question; runtime extensions now bake into the image (ADR 003), so a volume likely only helps the nix/buildah cache instead
 
 ## Docs & maintenance
