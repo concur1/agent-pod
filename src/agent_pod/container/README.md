@@ -150,25 +150,23 @@ Two repo modes, selected by the user config's `ephemeral` field:
 
 - **Ephemeral (`true`, inside a git repo with at least one commit):** the host
   repo's **`.git`** is mounted read-write at `/repo/.git` (not the working tree)
-  and three internal env vars are set — `AP_BRANCH=agent/<profile>/<session>`,
-  `AP_BASE=<host HEAD commit>`, `AP_REPO_GIT=/repo/.git`. The baked
+  and four internal env vars are set — `AP_BRANCH=agent/<profile>/<session>`,
+  `AP_BASE=<host HEAD commit>`, `AP_REPO_GIT=/repo/.git`, and
+  `AP_WORKTREE=/sandbox/<instance>` (the per-session worktree path). The baked
   `agent-pod-entrypoint` then runs
-  `git --git-dir=/repo/.git worktree add -b $AP_BRANCH /sandbox $AP_BASE` on
-  first run (or `... worktree add /sandbox $AP_BRANCH` on resume, once the
-  earlier run's worktree metadata has been pruned) and execs the agent with
-  `/sandbox` as its worktree. Because the container owns the worktree, every git
-  path it writes is a container path — the broken host-path pointer problem is
-  gone. **Only committed files ever reach the host**: uncommitted/untracked
-  work stays inside the pod. On exit `run_agent` runs a best-effort
-  `git worktree prune` on the host to drop the worktree metadata the container
-  wrote into `.git`; the `agent/<profile>/<session>` branch itself stays for
-  review. If a session is killed hard (e.g. an OOM kill) so that exit-time prune
-  never runs, the stale `/sandbox` registration survives and makes a later
-  `worktree add` fail — `run_agent` therefore checks before launching whether
-  `/sandbox` is registered; if a pod for this agent is still running the
-  registration is a live session's and it errors with a clear message instead
-  of pruning it out from under the running pod, otherwise it prunes the dead
-  registration. The baked entrypoint prunes once more right before it adds.
+  `git --git-dir=/repo/.git worktree add -b $AP_BRANCH $AP_WORKTREE $AP_BASE` on
+  first run, falling back to `... worktree add --force $AP_WORKTREE $AP_BRANCH`
+  when resuming a session whose branch already exists, and execs the agent from
+  inside that worktree. Because each session's worktree is a distinct subfolder
+  of `/sandbox`, concurrent sessions on one repo never collide on a shared path,
+  and a crashed session's leftover registration never blocks a fresh one. The
+  container owns the worktree, so every git path it writes is a container path
+  — the broken host-path pointer problem is gone. **Only committed files ever
+  reach the host**: uncommitted/untracked work stays inside the pod. On exit
+  `run_agent` runs a best-effort
+  `git worktree remove --force $AP_WORKTREE` so only this session's registration
+  is dropped from `.git` — other live sessions' worktrees are left alone; the
+  `agent/<profile>/<session>` branch itself stays for review.
 - **Direct (`false`, or not a git repo / no commits):** the working directory
   is mounted at `/sandbox` as before; no `AP_*` env, the entrypoint runs the
   agent directly.

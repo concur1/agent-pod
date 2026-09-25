@@ -123,7 +123,7 @@ class TestBuildPlan:
         assert by_kind["repo"].host_path == repo / ".git"
         assert by_kind["repo"].container_path == "/repo/.git"
         internal = {e.name: e for e in plan.envs if e.internal}
-        assert set(internal) == {"AP_BRANCH", "AP_BASE", "AP_REPO_GIT"}
+        assert set(internal) == {"AP_BRANCH", "AP_BASE", "AP_REPO_GIT", "AP_WORKTREE"}
         # Values never appear in the plan; the entrypoint gets them via podman -e.
         env_section = render_plan(plan, color=False).split("ENVIRONMENT VARIABLES")[1]
         assert "AP_BRANCH" in env_section and "agent/fixes/crisp-lamp" not in env_section

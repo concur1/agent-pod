@@ -63,13 +63,15 @@ class EphemeralRepo:
     """How an ephemeral git run exposes the repo to the container.
 
     The host's `.git` is mounted read-write and the container creates its own
-    per-session worktree on it, so only committed files ever reach the host.
-    None means the working tree is mounted directly at /sandbox instead.
+    per-session worktree in a subfolder of /sandbox, so only committed files
+    ever reach the host. None means the working tree is mounted directly at
+    /sandbox instead.
     """
 
     gitdir: Path  # host .git, mounted at gitdir_container (AP_REPO_GIT)
     branch: str  # agent/<profile>/<session> (AP_BRANCH)
     base: str  # host HEAD commit the worktree forks from (AP_BASE)
+    worktree: str  # container path the worktree is checked out at (AP_WORKTREE)
     gitdir_container: str = EPHEMERAL_GITDIR_CONTAINER
 
 
@@ -179,20 +181,22 @@ def _git_head_commit(cwd: Path) -> str | None:
     return out or None
 
 
-def repo_workspace(*, ephemeral: bool, cwd: Path, branch: str) -> EphemeralRepo | None:
+def repo_workspace(
+    *, ephemeral: bool, cwd: Path, branch: str, worktree: str
+) -> EphemeralRepo | None:
     """The ephemeral git exposure for this run, if any.
 
     Ephemeral mode mounts `.git` so the container creates its own per-session
-    worktree on `branch`, forked from the current host HEAD. Falls back to the
-    direct /sandbox mount when `ephemeral` is off, cwd isn't a git repo, or the
-    repo has no commits yet.
+    worktree on `branch` at `worktree` (a subfolder of /sandbox), forked from
+    the current host HEAD. Falls back to the direct /sandbox mount when
+    `ephemeral` is off, cwd isn't a git repo, or the repo has no commits yet.
     """
     if not ephemeral or not (cwd / ".git").is_dir():
         return None
     base = _git_head_commit(cwd)
     if base is None:
         return None
-    return EphemeralRepo(gitdir=cwd / ".git", branch=branch, base=base)
+    return EphemeralRepo(gitdir=cwd / ".git", branch=branch, base=base, worktree=worktree)
 
 
 def _ephemeral_env(repo: EphemeralRepo) -> dict[str, str]:
@@ -201,74 +205,8 @@ def _ephemeral_env(repo: EphemeralRepo) -> dict[str, str]:
         "AP_BRANCH": repo.branch,
         "AP_BASE": repo.base,
         "AP_REPO_GIT": repo.gitdir_container,
+        "AP_WORKTREE": repo.worktree,
     }
-
-
-def _sandbox_worktree_registered(cwd: Path) -> bool:
-    """Whether a git worktree is registered at the ephemeral /sandbox path."""
-    out = subprocess.run(
-        ["git", "-C", str(cwd), "worktree", "list", "--porcelain"],
-        capture_output=True,
-        text=True,
-    )
-    if out.returncode != 0:
-        return False
-    return any(
-        line.startswith("worktree ") and Path(line.split(maxsplit=1)[1]).name == "sandbox"
-        for line in out.stdout.splitlines()
-    )
-
-
-def _any_pod_running(container_name: str) -> bool:
-    """Whether any pod sharing this base container name is live.
-
-    Podman's name filter is a substring match, so `name=<base>` also catches
-    every session's container (`<base>-<session>`); the about-to-launch one
-    isn't running yet. Any podman failure reads as "none running" so a missing
-    podman or a blip never blocks a launch.
-    """
-    try:
-        out = subprocess.run(
-            ["podman", "ps", "--filter", f"name={container_name}", "--format", "{{.Names}}"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        ).stdout
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-    return bool(out and out.strip())
-
-
-def _clear_stale_sandbox_worktree(container_name: str) -> None:
-    """Make the shared /sandbox worktree slot available before the container
-    entrypoint tries to `worktree add` it.
-
-    A crashed session leaves its container-created worktree registered at
-    /sandbox (its exit-time prune never ran), and git then refuses `worktree
-    add` at that path — the cryptic fatal. Only one pod can own the slot, so if
-    a pod for this agent is live, the registration belongs to it: fail loudly
-    rather than pruning a running session's worktree out from under it. With no
-    live pod the registration is dead debris; drop it and let the new
-    container re-add.
-    """
-    if not _sandbox_worktree_registered(Path.cwd()):
-        return
-    if _any_pod_running(container_name):
-        print(
-            "Error: another session's pod is already using this repo's /sandbox "
-            f"worktree (live pod '{container_name}'). Stop the running session first "
-            "(e.g. `ap sessions <agent> --rm <session>`) before relaunching.",
-            file=sys.stderr,
-        )
-        # ponytail: liveness check keys on this agent's base container name, so a
-        # concurrently running pod of a *different* agent could still be pruned.
-        # Agent-pod has no per-repo container label to key on; fine until that exists.
-        raise SystemExit(1)
-    subprocess.run(
-        ["git", "-C", str(Path.cwd()), "worktree", "prune"],
-        capture_output=True,
-        text=True,
-    )
 
 
 def ensure_host_paths(
@@ -585,7 +523,7 @@ def _podman_command(
         "--name",
         instance_name,
         "-w",
-        "/sandbox",
+        (internal_env or {}).get("AP_WORKTREE", "/sandbox"),
     ]
 
     if use_bash:
@@ -674,9 +612,8 @@ def run_agent(
         ephemeral=ephemeral,
         cwd=Path.cwd(),
         branch=f"agent/{profile}/{session}",
+        worktree=f"/sandbox/{instance_name}",
     )
-    if ephemeral_repo is not None:
-        _clear_stale_sandbox_worktree(config.container_name)
     internal_env = _ephemeral_env(ephemeral_repo) if ephemeral_repo is not None else {}
 
     mounts = build_mounts(
@@ -728,13 +665,21 @@ def run_agent(
         print(f"Error: Failed to execute podman command: {execution_error}", file=sys.stderr)
         sys.exit(1)
     finally:
-        # Drop the container-created worktree metadata from the repo's .git. The
-        # worktree's gitdir points at the container-only /sandbox, so `prune`
-        # removes it — keeping `git worktree list` clean and letting a resumed
-        # session re-checkout its branch. The agent branch itself stays for review.
+        # Drop this session's worktree registration from the repo's .git. Its
+        # gitdir points at the container-only /sandbox/<instance> path, so
+        # targeted `remove --force` on that one path leaves any other live
+        # session's worktree alone. The agent branch itself stays for review.
         if ephemeral_repo is not None:
             subprocess.run(
-                ["git", "-C", str(Path.cwd()), "worktree", "prune"],
+                [
+                    "git",
+                    "-C",
+                    str(Path.cwd()),
+                    "worktree",
+                    "remove",
+                    "--force",
+                    ephemeral_repo.worktree,
+                ],
                 capture_output=True,
                 text=True,
             )

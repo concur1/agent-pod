@@ -21,6 +21,7 @@ from agent_pod.container.runner import (
     repo_workspace,
 )
 from agent_pod.types import FileMount
+from agent_pod.utils.names import get_instance_name
 
 _RED = "\033[31m"
 _RESET = "\033[0m"
@@ -84,6 +85,7 @@ def build_plan(
         ephemeral=ephemeral,
         cwd=cwd,
         branch=f"agent/{profile}/{session}",
+        worktree=f"/sandbox/{get_instance_name(config, session)}",
     )
     mounts = build_mounts(
         agent_name=agent,

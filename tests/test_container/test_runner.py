@@ -1,7 +1,6 @@
 """Tests for container runner module."""
 
 import os
-import shutil
 import signal
 import subprocess
 from unittest.mock import MagicMock, patch
@@ -838,76 +837,27 @@ class TestRunAgentEphemeral:
         # not the host working tree.
         assert any(a == f"{repo / '.git'}:/repo/.git:rw,z" for a in args)
         assert not any(a.startswith(f"{repo}:") for a in args)
-        # The image entrypoint gets the branch/base/gitdir it needs.
+        # The image entrypoint gets the branch/base/gitdir/worktree it needs.
         envs = {args[i + 1] for i, a in enumerate(args) if a == "-e"}
         assert "AP_REPO_GIT=/repo/.git" in envs
         assert "AP_BRANCH=agent/fixes/crisp-lamp" in envs
+        # The worktree lives in a per-session subfolder of /sandbox named after
+        # the instance, so concurrent sessions on one repo never collide on a
+        # single shared path.
+        assert "AP_WORKTREE=/sandbox/pi-sandbox-instance-crisp-lamp" in envs
+        assert args[args.index("-w") + 1] == "/sandbox/pi-sandbox-instance-crisp-lamp"
         head = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True
         ).stdout.strip()
         assert f"AP_BASE={head}" in envs
 
-    def _make_stale_sandbox_registration(self, repo):
-        """Register a worktree at a directory literally named `sandbox` (the
-        container-only /sandbox path), then remove the directory to simulate a
-        crashed session whose exit-time prune never ran but whose .git
-        registration survived."""
-        wt = repo.parent / "sandbox"
-        subprocess.run(
-            ["git", "-C", str(repo), "worktree", "add", "-q", "-b", "stale", str(wt)],
-            check=True,
-            capture_output=True,
-        )
-        shutil.rmtree(wt)
-        return wt
-
-    def test_prunes_stale_registration_before_launch(self, tmp_path, monkeypatch):
-        """A crashed session can leave its container-created worktree registered
-        at the /sandbox path while the worktree dir (the dead container's
-        /sandbox) is already gone — its exit-time prune never ran. Git then
-        refuses a fresh `worktree add` at the stale path, so run_agent prunes
-        dead registrations before launching the container."""
+    def test_removes_worktree_metadata_on_exit(self, tmp_path, monkeypatch):
+        """On exit the host drops this session's own worktree registration
+        (whose gitdir points at the container-only /sandbox/<instance> path)
+        with a targeted remove, not a blanket prune, so a live session's
+        worktree is never yanked out from under it."""
         repo = self._make_repo(tmp_path)
-        self._make_stale_sandbox_registration(repo)
         self._patch_prereqs(tmp_path, monkeypatch)
-
-        order = []
-        real_run = subprocess.run
-
-        def fake_run(cmd, **kw):
-            order.append(("sub", cmd))
-            return real_run(cmd, **kw)
-
-        monkeypatch.setattr("agent_pod.container.runner.subprocess.run", fake_run)
-
-        def fake_launch(command, instance_name=None):
-            order.append(("podman", command))
-            raise SystemExit(0)
-
-        monkeypatch.setattr("agent_pod.container.runner._run_podman", fake_launch)
-        monkeypatch.chdir(repo)
-        with pytest.raises(SystemExit):
-            run_agent("pi", [], ephemeral=True)
-
-        prune = ["git", "-C", str(repo), "worktree", "prune"]
-        assert any(kind == "sub" and cmd == prune for kind, cmd in order)
-        # The prune happens before the container launches, so its `worktree add`
-        # won't hit an already-registered /sandbox path.
-        assert order.index(("sub", prune)) < next(
-            i for i, (kind, _) in enumerate(order) if kind == "podman"
-        )
-        assert not (repo / ".git" / "worktrees" / "stale").exists()
-
-    def test_refuses_to_prune_a_live_pods_worktree(self, tmp_path, monkeypatch):
-        """A registered /sandbox worktree belongs to a session whose pod is
-        still running, not a crashed one: run_agent must not prune it out from
-        under the live pod. It errors with a clear message instead of launching
-        and lets the user stop that session first."""
-        repo = self._make_repo(tmp_path)
-        self._make_stale_sandbox_registration(repo)
-        self._patch_prereqs(tmp_path, monkeypatch)
-
-        # No subprocess calls happen at all if we bail on the live pod.
         calls = []
         real_run = subprocess.run
 
@@ -916,41 +866,22 @@ class TestRunAgentEphemeral:
             return real_run(cmd, **kw)
 
         monkeypatch.setattr("agent_pod.container.runner.subprocess.run", fake_run)
-
-        launched = []
-
-        def fake_launch(command, instance_name=None):
-            launched.append(command)
-            raise SystemExit(0)
-
-        monkeypatch.setattr("agent_pod.container.runner._run_podman", fake_launch)
-        monkeypatch.setattr("agent_pod.container.runner._any_pod_running", lambda name: True)
         monkeypatch.chdir(repo)
-
-        with pytest.raises(SystemExit) as err:
+        with pytest.raises(SystemExit):
             run_agent("pi", [], ephemeral=True)
-        # The live pod is detected, no prune runs, and no pod is launched.
-        assert err.value.code == 1
+
+        remove = [
+            "git",
+            "-C",
+            str(repo),
+            "worktree",
+            "remove",
+            "--force",
+            "/sandbox/pi-sandbox-instance",
+        ]
+        assert remove in calls
+        # No blanket prune that could sweep up another session's live worktree.
         assert ["git", "-C", str(repo), "worktree", "prune"] not in calls
-        assert launched == []
-
-    def test_prunes_worktree_metadata_on_exit(self, tmp_path, monkeypatch):
-        repo = self._make_repo(tmp_path)
-        self._patch_prereqs(tmp_path, monkeypatch)
-        calls = []
-        real_run = subprocess.run
-
-        def fake_run(cmd, **kw):
-            calls.append(cmd)
-            return real_run(cmd, **kw)
-
-        monkeypatch.setattr("agent_pod.container.runner.subprocess.run", fake_run)
-        monkeypatch.chdir(repo)
-        with pytest.raises(SystemExit):
-            run_agent("pi", [], ephemeral=True)
-
-        # Exit-time prune drops the container-created worktree metadata.
-        assert ["git", "-C", str(repo), "worktree", "prune"] in calls
 
     def test_empty_repo_falls_back_to_direct_mount(self, tmp_path, monkeypatch):
         """A git repo with no commits yet has no HEAD to fork from, so the
