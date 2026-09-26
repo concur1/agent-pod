@@ -134,7 +134,6 @@ class TestBuildPlan:
         assert by_kind["repo"].host_path == isolated / "repo"
         assert by_kind["repo"].container_path == "/sandbox"
         assert not any(e.internal for e in plan.envs)
-        assert not any(e.internal for e in plan.envs)
 
     def test_passthrough_envs_report_forwarded_status(self, isolated, passthrough_config):
         passthrough_config("pi", passthrough_envs=["HF_TOKEN", "EXAMPLE_TOKEN", "OPENAI_API_KEY"])

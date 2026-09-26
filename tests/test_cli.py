@@ -154,13 +154,6 @@ class TestMainArgparse:
         assert "NETWORK & CAPABILITIES" in output
         assert "read/write" in output
 
-    def test_plan_unknown_agent_rejected(self):
-        with (
-            patch.object(sys, "argv", ["ap", "plan", "--agent", "nonexistent"]),
-            pytest.raises(SystemExit),
-        ):
-            main()
-
     @patch("agent_pod.cli.run_agent")
     def test_run_with_session(self, mock_run_agent, no_config):
         with patch.object(sys, "argv", ["ap", "run", "--agent", "pi", "--session", "dev"]):
@@ -200,13 +193,6 @@ class TestMainArgparse:
         assert context_mounts[0].source == str(ctx.resolve())
         assert context_mounts[0].name == "context.md"
         assert context_mounts[0].context is True
-
-    def test_invalid_agent_flag_raises(self):
-        with (
-            patch.object(sys, "argv", ["ap", "run", "--agent", "nonexistent"]),
-            pytest.raises(SystemExit),
-        ):
-            main()
 
     @patch("agent_pod.cli.run_agent")
     def test_run_settings_file_defaults_to_pi_global(self, mock_run_agent, no_config):

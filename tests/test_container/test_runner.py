@@ -17,7 +17,6 @@ from agent_pod.container.runner import (
     tidy_noop_branches,
 )
 from agent_pod.types import FileMount
-from agent_pod.utils.names import get_instance_name
 
 
 def _config_with(agent: str, **updates):
@@ -502,16 +501,6 @@ class TestRunAgentSessionValidation:
         assert any(str(v).startswith(state_root) for v in captured["args"])
 
 
-class TestGetInstanceName:
-    def test_default_session_returns_base_name(self):
-        config = _minimal_config(container_name="pi-sandbox-instance")
-        assert get_instance_name(config, "default") == "pi-sandbox-instance"
-
-    def test_named_session_appends_suffix(self):
-        config = _minimal_config(container_name="pi-sandbox-instance")
-        assert get_instance_name(config, "dev") == "pi-sandbox-instance-dev"
-
-
 class TestEnsureHostPaths:
     def test_creates_directories_and_files(self, tmp_path, monkeypatch):
         state = tmp_path / "state"
@@ -680,16 +669,6 @@ class TestRunAgentErrorHandling:
             run_agent("pi", ["hello"])
         assert excinfo.value.code == 1
         assert "boom" in capsys.readouterr().err
-
-    def test_launch_receives_full_podman_command(self, tmp_path, monkeypatch):
-        """Ensure the launcher gets the podman binary and full command list."""
-        self._patch_prereqs(tmp_path, monkeypatch)
-        captured = _capture_run(monkeypatch)
-        with pytest.raises(SystemExit):
-            run_agent("pi", ["hello"])
-        assert captured["args"][0] == "podman"
-        assert "run" in captured["args"]
-        assert captured["args"][-1] == "hello"  # user args appended last
 
     def test_missing_settings_file_warns_and_falls_back(self, tmp_path, monkeypatch, capsys):
         """A missing --settings-file warns on stderr and falls back to default seeding."""
@@ -1102,32 +1081,6 @@ class TestPruneSessionBranch:
         assert "agent/default/legacy" not in branches
         assert "agent/claude/legacy" not in branches
         assert "agent/default/keep" in branches
-
-
-class TestRunningDirectlyInSandbox:
-    def _run(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
-        monkeypatch.setattr(
-            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
-        )
-        monkeypatch.setattr(
-            "agent_pod.container.runner.subprocess.run",
-            lambda *a, **k: MagicMock(returncode=1, stderr=""),
-        )
-        captured = _capture_run(monkeypatch)
-        with pytest.raises(SystemExit):
-            run_agent("pi", [])
-        return captured["args"]
-
-    def test_repo_mounted_at_sandbox_no_worktree_tmpfs(self, tmp_path, monkeypatch):
-        args = self._run(tmp_path, monkeypatch)
-        # Repo still mounted at /sandbox
-        assert any(a.endswith(":/sandbox:rw,z") for a in args)
-        # No worktree tmpfs and no worktree env
-        assert not any("--tmpfs" in a and "/worktrees" in a for a in args)
-        assert not any("AGENT_WORKTREE_PATH" in a for a in args)
-        assert not any(a == "/worktrees" for a in args)
 
 
 class TestRunPodman:

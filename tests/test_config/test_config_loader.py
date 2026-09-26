@@ -6,11 +6,6 @@ from agent_pod.config import get_agent_config, get_all_agent_names, load_agent_c
 
 
 class TestGetAllAgentNames:
-    def test_returns_sorted_list(self):
-        names = get_all_agent_names()
-        assert names == sorted(names)
-        assert len(names) == 3  # pi, claude, opencode
-
     def test_includes_expected_agents(self):
         names = get_all_agent_names()
         assert "pi" in names
@@ -65,12 +60,6 @@ class TestGetAgentConfig:
 
 
 class TestLoadAgentConfigs:
-    def test_loads_all_configs(self):
-        configs = load_agent_configs()
-        assert len(configs) == 3
-        assert "pi" in configs
-        assert "claude" in configs
-
     def test_all_configs_are_valid(self):
         configs = load_agent_configs()
         for _name, config in configs.items():

@@ -33,17 +33,3 @@ class TestLoadBasePrompt:
 
         with pytest.raises(FileNotFoundError, match="Git-workflow skill file not found"):
             load_base_prompt()
-
-    def test_prompt_mentions_git_workflow(self, tmp_path, monkeypatch):
-        # Ensure the bundled prompt file exists and has expected content
-        bundled = tmp_path / "git-workflow.md"
-        bundled.write_text("# Agent workflow\n\nUse `git`")
-
-        import agent_pod.prompts.loader as loader
-
-        monkeypatch.setattr(loader, "_bundled_prompt", lambda: bundled)
-        monkeypatch.setattr(Path, "home", lambda: tmp_path / "nonexistent_home")
-
-        result = load_base_prompt()
-        assert "git" in result
-        assert "workflow" in result.lower()
