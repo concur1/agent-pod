@@ -1,4 +1,4 @@
-.PHONY: clean check lint typecheck test format build run
+.PHONY: clean check lint typecheck test test-integration format build run
 
 # Run all checks: ruff lint + ty type check
 check: lint typecheck
@@ -14,6 +14,10 @@ typecheck:
 # Run the test suite
 test:
 	uv run pytest
+
+# Run the podman-gated integration tests (builds real images, needs podman + network)
+test-integration:
+	AGENT_POD_RUN_MATRIX=1 uv run pytest tests/test_container/test_integration.py tests/test_container/test_runtime_matrix.py
 
 # Auto-format with ruff (and fix lint issues)
 format:
