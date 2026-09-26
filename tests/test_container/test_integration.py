@@ -156,4 +156,5 @@ def test_non_ephemeral_run_does_not_create_worktree(image_tag, tmp_path):
 
     result = _launch(image_tag, repo, branch="", worktree="/sandbox/plain")
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
-    assert "worktree" not in _worktrees(repo)
+    # Only the main working tree is listed — no container-path worktree was added.
+    assert "worktree /sandbox/plain" not in _worktrees(repo)
