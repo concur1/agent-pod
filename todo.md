@@ -28,11 +28,13 @@
 - [ ] review/merge-conflict feature = a bundled profile, not new code — a `review` profile that uses profile→agent to pick the harness and mounts a review/merge-instructions context file (reuses builtin:git-workflow skill). Deliver: (a) review prompt file, (b) example `review:` profile in the docs/init, (c) test `ap run review` against a repo with conflicts
 - [ ] analytics agent = a bundled profile, not new code — a profile that mounts session state read-only (`~/.config/container-agents/<agent>/<session>/` state dirs + `agent/<profile>/<session>` branches) and a prompt file to cluster recurring errors from transcripts. Deliver: (a) analyst prompt file, (b) example `analytics:` profile in docs/init, (c) session-log capture — today only pi's `sessions` state dir persists; `ap` never logs the agent's terminal output, so verify/capture transcripts across all agents before the analyst has anything to read
 - [ ] pi extensions in a named volume to improve startup time? — open question; runtime extensions now bake into the image (ADR 003), so a volume likely only helps the nix/buildah cache instead
+- [ ] a token limit to reach before automatic shutoff, might require work as it will be different for each harness.
 
 ## Docs & maintenance
 
 - [ ] ADR status update: ADR 004 is marked "spike + implementation pending" but all agents now build from named Nix flakes with no install_script — it's implemented; update the status so the repo docs aren't stale
 - [ ] further simplify the code, needs manual review
+- [ ] Github pages zensical site.
 
 ## Tests
 
