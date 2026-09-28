@@ -187,6 +187,32 @@ def _mainline_branch(cwd: Path) -> str | None:
     return None
 
 
+def _dead_worktree_paths(cwd: Path, branch: str) -> list[str]:
+    """Worktree paths still registered to `branch` whose path no longer exists.
+
+    A crashed session leaves its worktree registration pointing at a container-only
+    `/sandbox/<instance>` path that doesn't exist on the host; that registration
+    makes `git branch -D` refuse to delete the branch. Only paths that are actually
+    gone are returned, so a live session's real worktree path is never touched.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(cwd), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    target = f"refs/heads/{branch}"
+    paths: list[str] = []
+    path: str | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            path = line[len("worktree ") :]
+        elif line == f"branch {target}" and path is not None and not Path(path).exists():
+            paths.append(path)
+    return paths
+
+
 def _delete_noop_branch(cwd: Path, branch: str, mainline: str) -> bool:
     """Delete `branch` when its tip is an ancestor of `mainline`; True if deleted."""
     try:
@@ -202,7 +228,21 @@ def _delete_noop_branch(cwd: Path, branch: str, mainline: str) -> bool:
     deleted = subprocess.run(
         ["git", "-C", str(cwd), "branch", "-D", branch], capture_output=True, text=True
     )
-    return deleted.returncode == 0
+    if deleted.returncode == 0:
+        return True
+    # A dead worktree registration is the only thing still refusing the delete;
+    # clear it (host paths that actually exist — live sessions — are skipped) and
+    # retry once.
+    for path in _dead_worktree_paths(cwd, branch):
+        subprocess.run(
+            ["git", "-C", str(cwd), "worktree", "remove", "--force", path],
+            capture_output=True,
+            text=True,
+        )
+    retried = subprocess.run(
+        ["git", "-C", str(cwd), "branch", "-D", branch], capture_output=True, text=True
+    )
+    return retried.returncode == 0
 
 
 def prune_matching_branch(cwd: Path, branch: str) -> bool:
