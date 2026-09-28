@@ -2,5 +2,5 @@
 
 Fast, isolated container sandboxes for AI coding agents, built on **Podman**.
 
-Full documentation lives in [`docs/README.md`](docs/README.md) — the same file
-that renders the [zensical](https://zensical.org/) documentation site.
+Full documentation lives in [`docs/index.md`](docs/index.md) — the docs folder
+doubles as a [zensical](https://zensical.org/) documentation site.

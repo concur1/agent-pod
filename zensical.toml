@@ -1,6 +1,13 @@
 [project]
 site_url = "https://www.example.com/"
-site_name = "Documentation"
+site_name = "agent-pod"
+nav = [
+  { "Home" = "index.md" },
+  { "Tutorials" = "tutorials.md" },
+  { "How-to guides" = "guides.md" },
+  { "Reference" = "reference.md" },
+  { "Explanation" = "explanation.md" },
+]
 # site_description = "Your project description"
 # site_author = "Your name"
 
