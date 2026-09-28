@@ -284,7 +284,38 @@ class TestHostSkillsDirPassthrough:
 
 
 class TestEnvPassthrough:
-    def test_only_vars_in_launching_shell_are_forwarded(self, tmp_path, monkeypatch):
+    def test_missing_passthrough_env_var_aborts_launch(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
+        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
+        monkeypatch.setattr(
+            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
+        )
+        monkeypatch.setattr(
+            "agent_pod.container.runner.subprocess.run",
+            lambda *a, **k: MagicMock(returncode=1, stderr=""),
+        )
+        # Env passthrough is opt-in; exercise it with a config that declares some.
+        cfg = get_effective_agent_config("opencode").model_copy(
+            update={
+                "passthrough_envs": ["EXAMPLE_TOKEN", "EXAMPLE_SECRET_KEY", "EXAMPLE_PROJECT_ID"]
+            }
+        )
+        monkeypatch.setattr(
+            "agent_pod.container.runner.get_effective_agent_config", lambda name: cfg
+        )
+
+        _capture_run(monkeypatch)
+
+        # One configured var absent from the launching shell: launch is refused.
+        monkeypatch.setenv("EXAMPLE_SECRET_KEY", "example-secret")
+        monkeypatch.setenv("EXAMPLE_PROJECT_ID", "example-project")
+        monkeypatch.delenv("EXAMPLE_TOKEN", raising=False)
+
+        with pytest.raises(SystemExit) as exc:
+            run_agent("opencode", [])
+        assert exc.value.code == 2
+
+    def test_all_passthrough_env_vars_are_forwarded(self, tmp_path, monkeypatch):
         monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
         monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
         monkeypatch.setattr(
@@ -306,18 +337,15 @@ class TestEnvPassthrough:
 
         captured = _capture_run(monkeypatch)
 
-        # Only the vars present in the launching shell are forwarded.
-        monkeypatch.setenv("EXAMPLE_SECRET_KEY", "example-secret")
-        monkeypatch.setenv("EXAMPLE_PROJECT_ID", "example-project")
-        monkeypatch.delenv("EXAMPLE_TOKEN", raising=False)
+        # With every configured var set, each one lands in the podman command.
+        for name in ("EXAMPLE_TOKEN", "EXAMPLE_SECRET_KEY", "EXAMPLE_PROJECT_ID"):
+            monkeypatch.setenv(name, f"{name}-value")
 
         with pytest.raises(SystemExit):
             run_agent("opencode", [])
 
         passed = {captured["args"][i + 1] for i, a in enumerate(captured["args"]) if a == "-e"}
-        assert "EXAMPLE_SECRET_KEY" in passed
-        assert "EXAMPLE_PROJECT_ID" in passed
-        assert "EXAMPLE_TOKEN" not in passed
+        assert {"EXAMPLE_TOKEN", "EXAMPLE_SECRET_KEY", "EXAMPLE_PROJECT_ID"} <= passed
 
 
 class TestOpencodeAuthJson:

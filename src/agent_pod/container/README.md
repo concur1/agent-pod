@@ -184,14 +184,16 @@ always frees the container.
 - **Env passthrough (opt-in)** — no environment variables are forwarded by
   default, so `ap plan` never lists a wall of unused API keys. If an agent needs
   one, add `passthrough_envs` to your own config (project or user layer), e.g.
-  `passthrough_envs: [MY_API_KEY]`; only variables set in
-  the launching shell are actually injected via `-e`. This is a deliberate
+  `passthrough_envs: [MY_API_KEY]`; every listed variable must be set in the
+  launching shell or `ap run`/`ap shell` refuses to start (listing the missing
+  ones), then injects each via `-e`. This is a deliberate
   trade-off for a local dev tool: the agent process can read those keys. For
   workloads where agents must never hold credentials, see the
   credential-brokering architecture in
   [`adr/001-credential-brokering-architecture.md`](../../../adr/001-credential-brokering-architecture.md).
-- **Forwarded vars vs. persisted credentials** — a passthrough var is only
-  forwarded when it is set in the shell that launches `ap`. If a model is
+- **Forwarded vars vs. persisted credentials** — a passthrough var must be set
+  in the shell that launches `ap`, or launch fails with the missing names. If a
+  model is
   configured with `apiKey: "$MY_API_KEY"` but the var isn't set at launch, the
   model stays unauthenticated. For a login that does not depend on the launch
   shell, store the key in the persisted `auth.json` instead (auto-seeded from

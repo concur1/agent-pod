@@ -579,6 +579,11 @@ def _fold_mount_into_dir(mount: Mount, parent: Mount) -> None:
         pass  # plan preview must not crash; a runtime error would surface anyway
 
 
+def missing_passthrough_envs(config: AgentConfig, env: Mapping[str, str]) -> list[str]:
+    """Declared `passthrough_envs` names that aren't set in `env`."""
+    return [key for key in config.passthrough_envs if key not in env]
+
+
 def _podman_command(
     *,
     agent_name: str,
@@ -655,6 +660,15 @@ def run_agent(
     extra_files = [*(files or []), *(context_files or [])]
     if extra_files:
         config = config.model_copy(update={"files": [*config.files, *extra_files]})
+
+    missing = missing_passthrough_envs(config, os.environ)
+    if missing:
+        print(
+            "Error: passthrough env var(s) not set in this shell: "
+            f"{', '.join(missing)}. Set them or remove them from `passthrough_envs`.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
 
     if not valid_session_name(session):
         print(
