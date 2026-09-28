@@ -22,7 +22,7 @@ An explicit session maps to a stable branch, so a later `ap run fixes
 
 You've now run a sandboxed agent end to end. From here:
 
-- [How-to guides](../guides/) — configure mounts, git sessions, and skills for
-  real work.
-- [Explanation](../explanation/) — how the session state and git branches fit
-  together.
+- [**Config**](../guides/config.md) — configure mounts, git sessions, and
+  skills for real work.
+- [**Git sessions**](../explanation/git-sessions.md) — how the session state
+  and git branches fit together.

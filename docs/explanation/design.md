@@ -1,15 +1,11 @@
 ---
-title: Explanation
+title: Design
 ---
 
-# Explanation
+# Design
 
-The big picture: how agent-pod fits together, and why the design is the way it
-is. For commands and config keys, see the [reference](../reference/).
-
-- [**Git sessions**](git-sessions.md) — ephemeral vs direct mode, the
-  worktree lifecycle, and git identity inside the sandbox.
-- [**Architecture**](architecture.md) — skills, profiles, and config merging.
+The core model: what agent-pod is for, why the sandbox is disposable, and how
+cleanup works.
 
 ## What agent-pod is for
 

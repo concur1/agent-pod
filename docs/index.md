@@ -20,21 +20,21 @@ left behind.
     **New to agent-pod?** Follow the
     [**installation guide**](tutorials/install.md) to get set up, then
     [**run your first agent**](tutorials/quickstart.md) — you'll have a
-    sandboxed agent working in minutes. The full
-    [**Tutorials**](tutorials/) take you from there.
+    sandboxed agent working in minutes. The rest of the
+    [**Tutorials**](tutorials/install.md) take you from there.
 
 ## What's in these docs
 
 The four quadrants of the [Diátaxis](https://diataxis.fr/) model:
 
-- [**Tutorials**](tutorials/) — learning by doing: install, first run,
-  profiles, and sessions, no prior knowledge assumed.
-- [**How-to guides**](guides/) — task recipes: configure agent-pod, mount
-  files, work in git-heavy repositories, add skills.
-- [**Reference**](reference/) — the facts: the command line and the config
-  files.
-- [**Explanation**](explanation/) — the big picture: how the sandbox, sessions,
-  and git worktrees fit together and why it works this way.
+- [**Tutorials**](tutorials/install.md) — learning by doing: install, first
+  run, profiles, and sessions, no prior knowledge assumed.
+- [**How-to guides**](guides/config.md) — task recipes: configure agent-pod,
+  mount files, work in git-heavy repositories, add skills.
+- [**Reference**](reference/cli.md) — the facts: the command line and the
+  config files.
+- [**Explanation**](explanation/design.md) — the big picture: how the sandbox,
+  sessions, and git worktrees fit together and why it works this way.
 
 ## Requirements
 
