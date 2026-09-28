@@ -1,6 +1,7 @@
 """Tests for container runner module."""
 
 import os
+import shutil
 import signal
 import subprocess
 from unittest.mock import MagicMock, patch
@@ -983,6 +984,21 @@ class TestPruneSessionBranch:
     def test_keeps_branch_that_does_not_exist(self, tmp_path):
         repo = self._make_repo(tmp_path)
         assert prune_matching_branch(repo, "agent/default/ghost") is False
+
+    def test_prunes_branch_with_dead_worktree_registration(self, tmp_path):
+        """A crashed session's stale worktree registration (path gone) blocks
+        `branch -D`; the tidy clears it and still prunes the no-op branch."""
+        repo = self._make_repo(tmp_path)
+        dead = tmp_path / "instance-ghost"
+        subprocess.run(
+            ["git", "-C", str(repo), "worktree", "add", "-b", "agent/default/ghost", str(dead)],
+            check=True,
+            capture_output=True,
+        )
+        shutil.rmtree(dead)  # container is gone; only its registration remains
+
+        assert prune_matching_branch(repo, "agent/default/ghost") is True
+        assert "agent/default/ghost" not in self._branches(repo)
 
     def test_run_agent_prunes_noop_branch_on_exit(self, tmp_path, monkeypatch):
         """Closing a session that left the branch at main (no commits) drops it."""
