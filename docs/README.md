@@ -415,5 +415,3 @@ adr/                       # architecture decision records
 flake.nix                  # Nix dev environment
 ```
 
-For details on how the sandbox is built and run, see
-[`src/agent_pod/container/README.md`](src/agent_pod/container/README.md).

@@ -1,7 +1,7 @@
 # How the sandbox works
 
 This module builds and runs a disposable container image for each agent. See
-the [root README](../../../README.md) for usage; this file explains the
+the [root README](../../docs/README.md) for usage; this file explains the
 implementation.
 
 ## Image build (`builder.py`)
