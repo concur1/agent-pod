@@ -1,3 +1,10 @@
+---
+title: agent-pod
+description: Fast, isolated container sandboxes for AI coding agents, built on Podman.
+hide:
+  - path
+---
+
 # agent-pod
 
 Fast, isolated container sandboxes for AI coding agents, built on **Podman**.
@@ -61,8 +68,10 @@ ap run fixes --context-file ./docs/notes.md --context-file ./docs/api.md:api.md
 ap init
 ```
 
-> **First run:** if no config file exists on any level, `ap run` walks you
-> through `ap init` automatically before launching the sandbox.
+!!! note "First run"
+
+    If no config file exists on any level, `ap run` walks you through
+    `ap init` automatically before launching the sandbox.
 
 ## Commands
 
@@ -215,7 +224,7 @@ agent setting without editing the bundled agent configs.
 - Global: `~/.config/container-agents/config.yaml`
 - Project: `.agent-pod.yaml` in the current working directory
 
-A fully-commented reference is in [`agent-pod.example.yaml`](agent-pod.example.yaml) at
+A fully-commented reference is in [`agent-pod.example.yaml`](https://github.com/concur1/agent-pod/blob/main/agent-pod.example.yaml) at
 the repo root.
 
 ### Generating a config with `ap init`
@@ -404,7 +413,7 @@ uv run ruff check .       # lint
 ```
 
 Uses [uv](https://docs.astral.sh/uv/) for dependency management and a
-[Nix flake](flake.nix) (uv2nix) for a reproducible dev environment.
+[Nix flake](https://github.com/concur1/agent-pod/blob/main/flake.nix) (uv2nix) for a reproducible dev environment.
 
 ## Layout
 
