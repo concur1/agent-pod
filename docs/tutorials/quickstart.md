@@ -1,16 +1,10 @@
 ---
-title: Tutorials
+title: Quickstart
 ---
 
-# Tutorials
+# Quickstart
 
-Learn agent-pod by doing. This walkthrough assumes nothing beyond the
-[requirements](index.md#requirements); by the end you'll have run an agent,
-used a profile, and persisted a session.
-
-## Install agent-pod
-
-[Install](guides.md#install-agent-pod) agent-pod first, then come back here.
+**Install agent-pod first** — [Install agent-pod](install.md).
 
 ## Run your first agent
 
@@ -45,43 +39,6 @@ It's the same build, but the entrypoint is an interactive bash shell instead
 of the agent. `ap shell` takes an optional profile positional, just like
 `ap run`.
 
-## Use a profile
-
-A **profile** is a named bundle of overrides — a different agent, extra
-flags, different file mounts. The `default` profile is active unless you name
-one:
-
-```sh title="Run a profile"
-ap run fixes
-```
-
-The harness agent comes from the profile's `agent` (else the config's
-`agent`), so `ap run fixes` may launch a completely different tool than plain
-`ap run`. Force the harness with `--agent`:
-
-```sh title="Override the harness"
-ap run fixes --agent pi
-```
-
-See which profiles exist and what each one overrides:
-
-```sh title="List profiles"
-ap list
-```
-
-## Persist state with a session
-
-Each run gets a fresh humanized session name (`crisp-lamp`, ...) and its own
-isolated state. Pass `--session` to keep that state across runs — for parallel
-work or to resume later:
-
-```sh title="Named session"
-ap run fixes --session dev
-```
-
-An explicit session maps to a stable branch, so a later `ap run fixes
---session dev` checks the same branch back out and continues where you left.
-
 ## Launch flags you'll meet
 
 ```sh
@@ -99,8 +56,7 @@ ap run fixes --context-file ./docs/notes.md --context-file ./docs/api.md:api.md 
 5. Mount extra context files into the agent, `@`-referenced in its
    instructions. Repeatable.
 
-## Next steps
+## Next
 
-- [How-to guides](guides.md) — configure profiles, mounts, and git sessions.
-- [Reference](reference.md) — every command, option, and config key.
-- [Explanation](explanation.md) — how sessions and worktrees fit together.
+[Use a profile](profiles.md) — why `ap run fixes` launches something different
+to plain `ap run`.

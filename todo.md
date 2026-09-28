@@ -16,6 +16,7 @@
 
 ## Config & profiles
 
+- [ ] discover the project config at every directory level: walk up from the cwd and merge each `.agent-pod.yaml` found (nearest wins per key) — today only `./.agent-pod.yaml` in the working directory is read (`loader._project_config_path()` returns `Path.cwd() / PROJECT_CONFIG_NAME`)
 - [ ] make the agent name and email for git configrable.
 - [ ] research profile: create one (e.g. an example `research:` profile — agent + context files for web-research work, alongside `audit`/`daily` in the docs)
 - [ ] allow configuring the agent's JSON settings inline in a profile (a `settings:` dict), not just via a `settings_file` host path

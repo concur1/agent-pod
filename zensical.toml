@@ -3,10 +3,33 @@ site_url = "https://www.example.com/"
 site_name = "agent-pod"
 nav = [
   { "Home" = "index.md" },
-  { "Tutorials" = "tutorials.md" },
-  { "How-to guides" = "guides.md" },
-  { "Reference" = "reference.md" },
-  { "Explanation" = "explanation.md" },
+  { "Tutorials" = [
+    "tutorials/index.md",
+    { "Install" = "tutorials/install.md" },
+    { "Quickstart" = "tutorials/quickstart.md" },
+    { "Profiles" = "tutorials/profiles.md" },
+    { "Sessions" = "tutorials/sessions.md" },
+  ] },
+  { "How-to guides" = [
+    "guides/index.md",
+    { "Config" = "guides/config.md" },
+    { "Mounts & context" = "guides/mounts.md" },
+    { "Pi settings" = "guides/settings.md" },
+    { "Git work" = "guides/git.md" },
+    { "Skills" = "guides/skills.md" },
+    { "Profiles to taste" = "guides/recipes.md" },
+    { "Contribute" = "guides/contribute.md" },
+  ] },
+  { "Reference" = [
+    "reference/index.md",
+    { "CLI" = "reference/cli.md" },
+    { "Config" = "reference/config.md" },
+  ] },
+  { "Explanation" = [
+    "explanation/index.md",
+    { "Git sessions" = "explanation/git-sessions.md" },
+    { "Architecture" = "explanation/architecture.md" },
+  ] },
 ]
 # site_description = "Your project description"
 # site_author = "Your name"
@@ -46,6 +69,8 @@ features = [
   "navigation.path",
   # "navigation.prune",
   "navigation.sections",
+  "navigation.tabs",
+  "navigation.tabs.sticky",
   # "navigation.tabs",
   # "navigation.tabs.sticky",
   "navigation.top",
