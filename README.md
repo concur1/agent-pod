@@ -114,9 +114,9 @@ explicit `--session`. Define profiles in your config:
 
 ### Profile ideas
 
-Each profile is a set of run-level overrides. `ap list` lists what each one
-does (`(active)` marks the config's `profile:` default, else `default`). A few
-shapes that work out of the box:
+Each profile is an overlay on top of the top-level config. `ap list` lists
+what each one does (`(active)` marks the config's `profile:` default, else
+`default`). A few shapes that work out of the box:
 
 - **`readonly` (locked-down)** — a different (cheaper/reviewer) harness agent
   configured for read-only review work:
@@ -125,8 +125,11 @@ shapes that work out of the box:
     readonly:
       agent: pi
   ```
-  Today profiles control *run* options (agent, flags, context files, settings)
-  and per-profile `files:` mounts. Profile `files` entries
+  Today profiles control *run* options (agent, flags, context files, settings),
+  agent-config overrides (`passthrough_envs`, `extra_packages`, `tmpfs_mounts`,
+  `image_tag`, `flake`, ...), and per-profile `files:` mounts — any option
+  settable at the top level is settable per profile, with top-level values as
+  the baseline. Profile `files` entries
   append after the top-level user `files`, and a later mount at the same
   container path replaces an earlier one — so a profile can flip a bundled
   read-only mount to read/write. The one thing still not expressible per

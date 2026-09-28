@@ -35,7 +35,10 @@
 # extra_args: [--model, sonnet]
 
 # Named profiles (`ap list` shows them; `ap run <profile>` uses one).
-# Each is a set of run-level overrides; unset fields inherit the top level.
+# Each is an overlay on top of the top-level config: unset fields inherit the
+# top level (which stays the baseline applied to every profile), and any option
+# settable at the top level is settable per profile — agent, flags, files,
+# passthrough envs, extra_packages, tmpfs, image_tag, flake, ...
 # Ideas:
 #
 #   readonly — locked down: use a different (cheaper/reviewer) agent for
@@ -48,12 +51,10 @@
 #              so new skills persist across runs of this profile without ever
 #              touching the host dir.
 #
-# Note: profiles tune run options plus per-profile `files` mounts. `files`
-# entries append after the top-level user `files`, and a later mount at the
-# same container path replaces an earlier one — that's how `skills` here flips
-# the bundled read-only ~/.agent/skills mount to read/write. (For writes to
-# flow straight back to the host, drop `seed: true`.) Networking egress per
-# profile is still not expressible.
+# Note: per-profile `files` entries append after the top-level user `files`, and
+# a later mount at the same container path replaces an earlier one — that's how
+# `skills` here flips the bundled read-only ~/.agent/skills mount to read/write.
+# (For writes to flow straight back to the host, drop `seed: true`.)
 # profile: readonly
 # profiles:
 #   readonly:
@@ -73,6 +74,10 @@
 #         permissions: rw
 #         seed: true
 #         description: your skills dir (seeded copy; writes kept in session state)
+#   prod:
+#     agent: pi
+#     passthrough_envs: [AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY]
+#     extra_packages: [pulumi]
 
 # Agent-config overrides — flat top-level keys, applied to whichever agent is
 # run. A bare string is accepted as a one-item list. extra_packages names are

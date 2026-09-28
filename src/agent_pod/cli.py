@@ -12,7 +12,6 @@ from agent_pod.config import (
     get_effective_agent_config,
     get_user_config,
 )
-from agent_pod.config.loader import _deep_merge
 from agent_pod.container import run_agent
 from agent_pod.log import configure_logging
 from agent_pod.types import (
@@ -114,9 +113,9 @@ def _default_settings_path() -> str:
     return str(Path.home() / ".pi" / "settings.json")
 
 
-def _resolve_agent(cli_agent: str | None, user_cfg: UserConfig, subcommand: str) -> str:
+def _resolve_agent(cli_agent: str | None, cfg: ProfileConfig, subcommand: str) -> str:
     """Return the agent for a subcommand: CLI arg wins, else the config default."""
-    agent = cli_agent or user_cfg.agent
+    agent = cli_agent or cfg.agent
     if agent is None:
         print(
             f"Error: no agent given for '{subcommand}'. "
@@ -136,16 +135,16 @@ def _resolve_agent(cli_agent: str | None, user_cfg: UserConfig, subcommand: str)
 
 def _effective_user_config(
     user_cfg: UserConfig, cli_profile: str | None
-) -> tuple[str, UserConfig, list[FileMount] | None]:
-    """Resolve the active profile and its overlaid config.
+) -> tuple[str, ProfileConfig]:
+    """Resolve the active profile to its complete config.
 
-    Returns (profile_name, config, profile_files). The profile is the positional
-    `cli_profile`, else the config `profile`, else "default". The selected
-    profile's run-level fields overlay the merged top-level config per key;
-    `files` appends after the top-level user `files` (which themselves append to
-    the bundled agent's). `profile_files` is that appended slice alone, so
-    callers can pass it to the runner without re-appending top-level files
-    (those already flow through `get_effective_agent_config`).
+    Returns (profile_name, effective_config). The profile is the positional
+    `cli_profile`, else the config `profile`, else "default". The effective
+    config is the top-level defaults applied to all configs, overlaid with the
+    selected profile's per-key overrides (`files` appends after the top level) —
+    see UserConfig.effective. It resolves into the concrete AgentConfig used by
+    the runner, so any config option settable at the top level is settable per
+    profile.
     """
     profile = cli_profile or user_cfg.profile or DEFAULT_PROFILE
     if profile != "default" and profile not in user_cfg.profiles:
@@ -159,18 +158,7 @@ def _effective_user_config(
             file=sys.stderr,
         )
         raise SystemExit(2)
-    overrides = user_cfg.profiles.get(profile)
-    if not overrides:
-        return profile, user_cfg, None
-    merged_data = _deep_merge(
-        user_cfg.model_dump(exclude_none=True), overrides.model_dump(exclude_none=True)
-    )
-    if overrides.files:
-        merged_data["files"] = [f.model_dump(exclude_none=True) for f in (user_cfg.files or [])] + [
-            f.model_dump(exclude_none=True) for f in overrides.files
-        ]
-    merged = UserConfig.model_validate(merged_data)
-    return profile, merged, overrides.files
+    return profile, user_cfg.effective(profile)
 
 
 def _used_session_ids(agent_dir: Path) -> set[str]:
@@ -187,22 +175,22 @@ def _run(args: argparse.Namespace, use_bash: bool, label: str) -> None:
 
     ensure_user_config(agent_hint=args.agent)
     user_cfg = get_user_config()
-    profile, user_cfg, profile_files = _effective_user_config(user_cfg, args.profile)
-    agent = _resolve_agent(args.agent, user_cfg, label)
-    # CLI flags win over the user config; unset flags fall back to config values,
-    # then to CLI defaults. Config extra_args don't apply when dropping to a bash
-    # shell (the runner ignores them in bash mode anyway).
+    profile, eff = _effective_user_config(user_cfg, args.profile)
+    agent = _resolve_agent(args.agent, eff, label)
+    # CLI flags win over the config; unset flags fall back to the effective
+    # (profile-resolved) config values, then to CLI defaults. Config extra_args
+    # don't apply when dropping to a bash shell (the runner ignores them anyway).
     extra_args = [a for a in args.extra_args if a != "--"]
     if not extra_args and not use_bash:
-        extra_args = user_cfg.extra_args or []
+        extra_args = eff.extra_args or []
     context_file_args = (
-        args.context_file if args.context_file is not None else (user_cfg.context_files or [])
+        args.context_file if args.context_file is not None else (eff.context_files or [])
     )
     context_files = _parse_context_files(context_file_args)
     # The settings-file bake is pi-specific; other agents never read it, so only
     # resolve it (and warn about a missing file) for the pi agent.
     settings_file = (
-        args.settings_file or user_cfg.settings_file or _default_settings_path()
+        args.settings_file or eff.settings_file or _default_settings_path()
         if agent == "pi"
         else None
     )
@@ -210,7 +198,7 @@ def _run(args: argparse.Namespace, use_bash: bool, label: str) -> None:
     # Explicit --session/config session: persistent session name + isolated state.
     # Auto sessions get a fresh humanized id so each run gets its own branch/
     # worktree instead of reusing the profile's; dedupe against session state dirs.
-    explicit_session = args.session or user_cfg.session
+    explicit_session = args.session or eff.session
     session = explicit_session or humanized_id(_used_session_ids(_state_dir() / agent))
 
     run_agent(
@@ -220,9 +208,8 @@ def _run(args: argparse.Namespace, use_bash: bool, label: str) -> None:
         session=session,
         profile=profile,
         context_files=context_files,
-        files=profile_files,
         settings_file=Path(settings_file).expanduser().resolve() if settings_file else None,
-        ephemeral=bool(user_cfg.ephemeral),
+        user_cfg=eff,
     )
 
 
@@ -300,16 +287,11 @@ def _list_profiles() -> None:
 def _default_profile_summary(user_cfg: UserConfig) -> str:
     """Compact summary of the `default` profile's effective run settings.
 
-    The config's top-level run keys are the baseline; a `profiles: {default: …}`
-    block (if any) overlays them per key, mirroring how `_effective_user_config`
-    resolves the active profile.
+    The config's top-level run keys are the baseline applied to all configs; a
+    `profiles: {default: …}` block (if any) overlays them per key — exactly what
+    `_effective_user_config` resolves for the active profile.
     """
-    fields = ("agent", "context_files", "files", "extra_args", "settings_file")
-    data = {f: getattr(user_cfg, f) for f in fields if getattr(user_cfg, f) is not None}
-    overlay = user_cfg.profiles.get("default")
-    if overlay:
-        data.update({k: v for k, v in overlay.model_dump(exclude_none=True).items() if k in fields})
-    return _profile_summary(ProfileConfig.model_validate(data))
+    return _profile_summary(user_cfg.effective("default"))
 
 
 def _profile_summary(profile: ProfileConfig) -> str:
@@ -390,18 +372,17 @@ def cmd_plan(args: argparse.Namespace) -> None:
     from agent_pod.plan import build_plan, color_enabled, render_plan
 
     user_cfg = get_user_config()
-    profile, user_cfg, profile_files = _effective_user_config(user_cfg, args.profile)
-    agent = _resolve_agent(args.agent, user_cfg, "plan")
+    profile, eff = _effective_user_config(user_cfg, args.profile)
+    agent = _resolve_agent(args.agent, eff, "plan")
     context_file_args = (
-        args.context_file if args.context_file is not None else (user_cfg.context_files or [])
+        args.context_file if args.context_file is not None else (eff.context_files or [])
     )
     context_files = _parse_context_files(context_file_args)
     plan = build_plan(
         agent=agent,
-        session=args.session or user_cfg.session or profile,
+        session=args.session or eff.session or profile,
         context_files=context_files,
-        files=profile_files,
-        ephemeral=bool(user_cfg.ephemeral),
+        user_cfg=eff,
         profile=profile,
     )
     print(render_plan(plan, color=color_enabled()))

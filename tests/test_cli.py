@@ -592,7 +592,13 @@ class TestRunProfiles:
         assert args[0] == "pi"
         assert kwargs["profile"] == "default"
         assert kwargs["session"] == "crisp-lamp"
-        assert kwargs["ephemeral"] is False
+        # Everything config-driven rides on the resolved profile config: top-level
+        # `ephemeral: false` and `extra_packages` with the profile's `agent`.
+        eff = kwargs["user_cfg"]
+        assert eff.agent == "pi"
+        assert eff.ephemeral is False
+        assert eff.extra_packages == ["uv"]
+        assert "ephemeral" not in kwargs
 
     @patch("agent_pod.cli.humanized_id", return_value="crisp-lamp")
     @patch("agent_pod.cli.run_agent")
@@ -675,9 +681,10 @@ class TestRunProfiles:
         assert "session: fixes" in out
 
     @patch("agent_pod.cli.run_agent")
-    def test_profile_files_passed_to_runner_and_append(self, mock_run_agent, tmp_path, monkeypatch):
-        """A profile's `files` entries are threaded to run_agent as extra FileMounts
-        (only the profile slice, so top-level files aren't mounted twice)."""
+    def test_profile_files_merged_and_flow_to_runner(self, mock_run_agent, tmp_path, monkeypatch):
+        """A profile's `files` are appended after the top-level defaults on the
+        resolved config `run_agent` receives (which `get_effective_agent_config`
+        mounts once — no separate slice, so top-level files aren't duplicated)."""
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         self._write_config(
@@ -698,9 +705,13 @@ class TestRunProfiles:
         with patch.object(sys, "argv", ["ap", "run", "skills"]):
             main()
         _, kwargs = mock_run_agent.call_args
-        assert kwargs["files"] == [
-            FileMount(source="~/.agent/skills", name="skills", permissions="rw", seed=True)
-        ]
+        eff = kwargs["user_cfg"]
+        # Top-level files first, the profile's appended after, exactly once each.
+        assert [f.name for f in eff.files] == ["base.md", "skills"]
+        assert eff.files[0].name == "base.md"
+        assert eff.files[1] == FileMount(
+            source="~/.agent/skills", name="skills", permissions="rw", seed=True
+        )
 
     @patch("agent_pod.cli.run_agent")
     def test_explicit_session_keeps_legacy_path(self, mock_run_agent, tmp_path, monkeypatch):

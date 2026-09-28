@@ -15,7 +15,7 @@ from agent_pod.config import get_effective_agent_config
 from agent_pod.container.builder import build_image
 from agent_pod.container.cleanup import cleanup_stale_container, container_running
 from agent_pod.prompts import load_base_prompt
-from agent_pod.types import STATE_DIR, AgentConfig, FileMount
+from agent_pod.types import STATE_DIR, AgentConfig, FileMount, ProfileConfig
 from agent_pod.utils.names import get_instance_name, valid_session_name
 
 logger = logging.getLogger(__name__)
@@ -693,10 +693,21 @@ def run_agent(
     files: list[FileMount] | None = None,
     settings_file: Path | None = None,
     ephemeral: bool = False,
+    user_cfg: ProfileConfig | None = None,
 ) -> None:
-    config = get_effective_agent_config(agent_name)
-    # Profile `files` and context files are just additional `files` entries;
-    # append them so mounts, instructions, and pi args all derive from one list.
+    """Launch an agent under a profile's effective config.
+
+    `user_cfg` is the resolved config (top-level defaults + active profile
+    overrides, see UserConfig.effective); when given it drives the agent config
+    (passthrough envs, tmpfs, flake, file mounts...) and `ephemeral`. `files`
+    remains for extra runtime-only mounts (CLI --context-file entries) appended
+    after the config's.
+    """
+    config = get_effective_agent_config(agent_name, user_cfg)
+    if user_cfg is not None:
+        ephemeral = bool(user_cfg.ephemeral)
+    # Profile `context_files` are just additional `files` entries; append them so
+    # mounts, instructions, and pi args all derive from one list.
     extra_files = [*(files or []), *(context_files or [])]
     if extra_files:
         config = config.model_copy(update={"files": [*config.files, *extra_files]})

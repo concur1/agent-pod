@@ -258,3 +258,95 @@ class TestGetEffectiveAgentConfig:
         # surfacing as a ValueError from the user config load.
         with pytest.raises(ValueError, match="Input should be a valid string"):
             get_effective_agent_config("opencode")
+
+
+class TestProfileEffectiveConfig:
+    def test_profile_config_reaches_agent_config(self, isolated_paths):
+        """Profile-level passthrough envs, tmpfs, packages and files resolve into
+        the AgentConfig an agent actually runs with (top-level defaults merged,
+        profile winning per key)."""
+        _write(
+            isolated_paths,
+            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            yaml.safe_dump(
+                {
+                    # Self-referential overlay; only `env-prod` is resolved here.
+                    "profiles": {
+                        "env-prod": {
+                            "agent": "pi",
+                            "passthrough_envs": ["AWS_ACCESS_KEY_ID"],
+                            "tmpfs_mounts": {"/root/.cache": "size=512m"},
+                            "extra_packages": ["pulumi"],
+                            "files": [{"name": "prod-secrets", "permissions": "rw", "seed": True}],
+                        }
+                    }
+                }
+            ),
+        )
+        eff = get_user_config().effective("env-prod")
+        config = get_effective_agent_config("pi", eff)
+        assert config.passthrough_envs == ["AWS_ACCESS_KEY_ID"]
+        # Profile tmpfs is merged onto the bundled default mount.
+        assert config.tmpfs_mounts["/root/.cache"] == "size=512m"
+        assert config.flake.extra_packages == ["pulumi"]
+        assert config.files[-1].name == "prod-secrets"
+        # Mount order preserved: agent builtins first, profile files appended.
+        assert any(f.source.startswith("builtin:") for f in config.files)
+        assert config.files[-1].seed is True
+
+    def test_top_level_defaults_are_baseline_for_all_profiles(self, isolated_paths):
+        """Top-level config is the baseline applied to every profile unless the
+        profile overrides that key (files append after the baseline)."""
+        _write(
+            isolated_paths,
+            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            yaml.safe_dump(
+                {
+                    "passthrough_envs": ["BASE_TOKEN"],
+                    "extra_packages": ["curl"],
+                    "files": [{"name": "base.md", "permissions": "ro"}],
+                    "profiles": {
+                        "extended": {
+                            "passthrough_envs": ["EXTRA_TOKEN"],
+                            "files": [{"name": "extra.md", "permissions": "ro"}],
+                        }
+                    },
+                }
+            ),
+        )
+        user_cfg = get_user_config()
+        # A profile with no overrides inherits the baseline wholesale.
+        bare = get_effective_agent_config("opencode", user_cfg.effective("default"))
+        assert bare.passthrough_envs == ["BASE_TOKEN"]
+        assert bare.flake.extra_packages == ["curl"]
+        assert bare.files[-1].name == "base.md"
+        # The overriding profile replaces per key, and appends its files after
+        # the baseline's.
+        extended = get_effective_agent_config("opencode", user_cfg.effective("extended"))
+        assert extended.passthrough_envs == ["EXTRA_TOKEN"]  # overridden
+        assert extended.flake.extra_packages == ["curl"]  # inherited
+        names = [f.name for f in extended.files]
+        assert names.index("base.md") < names.index("extra.md")
+
+    def test_unset_profile_keys_fall_back_to_baseline(self, isolated_paths):
+        """Any config option is supplyable per profile; keys a profile omits come
+        from the top-level baseline (agent config still fully resolves)."""
+        _write(
+            isolated_paths,
+            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            yaml.safe_dump(
+                {
+                    "image_tag": "v1",
+                    "allow_unfree": True,
+                    "profiles": {"notes": {"extra_args": ["--pdb"]}},
+                }
+            ),
+        )
+        cfg = get_user_config()
+        eff = cfg.effective("notes")
+        assert eff.image_tag == "v1"
+        assert eff.allow_unfree is True
+        assert eff.extra_args == ["--pdb"]
+        config = get_effective_agent_config("opencode", eff)
+        assert config.image_tag == "v1"
+        assert config.flake.allow_unfree is True

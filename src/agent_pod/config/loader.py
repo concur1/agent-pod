@@ -6,7 +6,15 @@ from pathlib import Path
 
 import yaml
 
-from agent_pod.types import STATE_DIR, AgentConfig, UserConfig
+from agent_pod.types import (
+    STATE_DIR,
+    AgentConfig,
+    ProfileConfig,
+    UserConfig,
+)
+from agent_pod.types import (
+    deep_merge as _deep_merge,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,22 +53,6 @@ def get_project_config_path() -> Path:
 def user_config_paths() -> list[Path]:
     """User config files that exist, global before project."""
     return [p for p in (get_global_config_path(), get_project_config_path()) if p.exists()]
-
-
-def _deep_merge(base: dict, override: dict) -> dict:
-    """Deep-merge `override` onto `base`: dicts merge key-by-key, else replace.
-
-    Lists and scalars in `override` fully replace the base value; nested dicts
-    (e.g. `flake`, `tmpfs_mounts`) merge field-by-field. This gives predictable
-    precedence across config layers without surprising append behavior.
-    """
-    merged = dict(base)
-    for key, value in override.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _deep_merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
 
 
 def _load_user_config_file(path: Path) -> UserConfig | None:
@@ -108,11 +100,13 @@ def get_user_config() -> UserConfig:
     return merged
 
 
-def _user_agent_overrides(user_cfg: UserConfig) -> dict:
-    """Extract AgentConfig-shaped overrides from a flat user config.
+def _user_agent_overrides(user_cfg: ProfileConfig) -> dict:
+    """Extract AgentConfig-shaped overrides from a resolved user config.
 
     The top-level `extra_packages` field is shorthand for `flake.extra_packages`
-    and takes precedence over a directly-nested `flake.extra_packages`.
+    and takes precedence over a directly-nested `flake.extra_packages`. Accepts
+    a `ProfileConfig` (top-level defaults or an effective profile), which
+    `UserConfig` also is.
     """
     result: dict = {}
     if user_cfg.flake is not None:
@@ -138,13 +132,17 @@ def _user_agent_overrides(user_cfg: UserConfig) -> dict:
     return result
 
 
-def get_effective_agent_config(agent_name: str) -> AgentConfig:
+def get_effective_agent_config(
+    agent_name: str, user_cfg: ProfileConfig | None = None
+) -> AgentConfig:
     """Return the validated agent config with user overrides applied.
 
-    The bundled agent config is merged with the user config's flat overrides
-    (extra_packages, image_tag, flake, ...), then re-validated with the same
-    Pydantic strategy as the agent files themselves. Overrides apply to whatever
-    agent is requested.
+    `user_cfg` is the resolved config (top-level defaults merged with the
+    active profile, see ``UserConfig.effective``); when None the raw user config
+    is used, so bundled-agent builds (`ap build`) get the shared defaults. The
+    config is merged with the flat overrides (extra_packages, image_tag, flake,
+    ...), then re-validated with the same Pydantic strategy as the agent files.
+    Overrides apply to whatever agent is requested.
 
     `files` is the one list that APPENDS instead of replacing: the user's entries
     come after the bundled agent's (preserving mount order and the position of
@@ -154,7 +152,8 @@ def get_effective_agent_config(agent_name: str) -> AgentConfig:
         KeyError: If the agent name is not found.
     """
     base = get_agent_config(agent_name)
-    overrides = _user_agent_overrides(get_user_config())
+    resolved = user_cfg if user_cfg is not None else get_user_config()
+    overrides = _user_agent_overrides(resolved)
     if not overrides:
         return base
     if "files" in overrides:

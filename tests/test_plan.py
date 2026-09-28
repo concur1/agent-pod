@@ -32,7 +32,7 @@ def passthrough_config(isolated, monkeypatch):
 
     def _apply(agent: str, **updates):
         cfg = _config_with(agent, **updates)
-        monkeypatch.setattr("agent_pod.plan.get_effective_agent_config", lambda name: cfg)
+        monkeypatch.setattr("agent_pod.plan.get_effective_agent_config", lambda n, _u=None: cfg)
         return cfg
 
     return _apply

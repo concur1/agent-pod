@@ -20,7 +20,7 @@ from agent_pod.container.runner import (
     build_mounts,
     repo_workspace,
 )
-from agent_pod.types import FileMount
+from agent_pod.types import FileMount, ProfileConfig
 from agent_pod.utils.names import get_instance_name
 
 _RED = "\033[31m"
@@ -68,12 +68,22 @@ def build_plan(
     session: str = "default",
     context_files: list[FileMount] | None = None,
     files: list[FileMount] | None = None,
+    user_cfg: ProfileConfig | None = None,
     env: Mapping[str, str] | None = None,
     cwd: Path | None = None,
     ephemeral: bool = False,
     profile: str = "default",
 ) -> Plan:
-    config = get_effective_agent_config(agent)
+    """Preview an agent run under a profile's effective config.
+
+    `user_cfg` is the resolved config (top-level defaults + active profile
+    overrides); when given it drives the agent config (passthrough envs, tmpfs,
+    flake, file mounts...) and `ephemeral`. `files` remains for extra
+    runtime-only mounts (CLI --context-file entries).
+    """
+    config = get_effective_agent_config(agent, user_cfg)
+    if user_cfg is not None:
+        ephemeral = bool(user_cfg.ephemeral)
     extra_files = [*(files or []), *(context_files or [])]
     if extra_files:
         config = config.model_copy(update={"files": [*config.files, *extra_files]})

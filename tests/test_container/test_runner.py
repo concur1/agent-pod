@@ -142,7 +142,7 @@ class TestPiGlobalAgentsMd:
             lambda *a, **k: MagicMock(returncode=1, stderr=""),
         )
         monkeypatch.setattr(
-            "agent_pod.container.runner.get_effective_agent_config", lambda name: config
+            "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: config
         )
         captured = _capture_run(monkeypatch)
 
@@ -237,7 +237,7 @@ class TestHostSkillsDirPassthrough:
         )
         if config is not None:
             monkeypatch.setattr(
-                "agent_pod.container.runner.get_effective_agent_config", lambda name: config
+                "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: config
             )
 
         captured = _capture_run(monkeypatch)
@@ -302,7 +302,7 @@ class TestEnvPassthrough:
             }
         )
         monkeypatch.setattr(
-            "agent_pod.container.runner.get_effective_agent_config", lambda name: cfg
+            "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: cfg
         )
 
         _capture_run(monkeypatch)
@@ -333,7 +333,7 @@ class TestEnvPassthrough:
             }
         )
         monkeypatch.setattr(
-            "agent_pod.container.runner.get_effective_agent_config", lambda name: cfg
+            "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: cfg
         )
 
         captured = _capture_run(monkeypatch)
@@ -361,7 +361,7 @@ class TestOpencodeAuthJson:
             lambda *a, **k: MagicMock(returncode=1, stderr=""),
         )
         monkeypatch.setattr(
-            "agent_pod.container.runner.get_effective_agent_config", lambda name: config
+            "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: config
         )
         captured = _capture_run(monkeypatch)
         with pytest.raises(SystemExit):
@@ -423,7 +423,7 @@ class TestReadonlyConfigMounts:
         )
         config = _config_with(agent, files=files)
         monkeypatch.setattr(
-            "agent_pod.container.runner.get_effective_agent_config", lambda name: config
+            "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: config
         )
 
         captured = _capture_run(monkeypatch)

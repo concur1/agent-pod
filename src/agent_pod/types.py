@@ -5,6 +5,23 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+
+def deep_merge(base: dict, override: dict) -> dict:
+    """Deep-merge `override` onto `base`: dicts merge key-by-key, else replace.
+
+    Lists and scalars in `override` fully replace the base value; nested dicts
+    (e.g. `flake`, `tmpfs_mounts`) merge field-by-field. This gives predictable
+    precedence across config layers without surprising append behavior.
+    """
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 # Base directory under the user's home holding agent-pod state and config.
 # Relative so each consumer resolves it against the current home at call time
 # (tests patch Path.home); the runner additionally exports it as BASE_STATE_DIR.
@@ -202,18 +219,19 @@ class FlakeOverrides(BaseModel):
 
 
 class ProfileConfig(BaseModel):
-    """Run-level overrides for a named profile (see UserConfig.profiles).
+    """The main config model: a complete user configuration for an agent run.
 
-    A profile names a branch namespace (`agent/<profile>/<id>`) and can pin the
-    agent-run options. Each set field overlays the merged top-level user config
-    for that key; unset fields inherit the top level.
+    Every field is optional, so one instance serves both as the config file's
+    top-level defaults (applied to ALL profiles unless explicitly overridden)
+    and as a single named profile's overrides on top of those defaults. An
+    effective profile — `top_level.merged_with(profiles[name])` — resolves into
+    a concrete `AgentConfig` via `get_effective_agent_config`. Every config
+    option lives here, so any of them can be supplied per-profile.
     """
 
     agent: str | None = Field(
         default=None,
-        description=(
-            "Harness agent when this profile is active (else the config's default `agent`)."
-        ),
+        description="Default agent for `ap run`/`build`/`sessions` when none is given on the CLI.",
     )
     context_files: list[str] | None = Field(
         default=None, description="Default `--context-file` entries (HOST_PATH[:NAME])."
@@ -221,43 +239,14 @@ class ProfileConfig(BaseModel):
     files: list[FileMount] | None = Field(
         default=None,
         description=(
-            "Extra file/dir mounts added when this profile is active, appended "
-            "after the top-level `files`. A later mount at the same container "
-            "path replaces an earlier one — e.g. flip the bundled read-only "
-            "skills mount to read/write (`source: ~/.agent/skills, name: skills, "
-            "permissions: rw, seed: true`)."
+            "File/dir mounts appended to the agent's `files` (see AgentConfig.files); a "
+            "later mount at the same container path replaces an earlier one."
         ),
     )
     extra_args: list[str] | None = Field(
         default=None, description="Default extra args forwarded to the agent."
     )
     settings_file: str | None = Field(default=None, description="Default `--settings-file` path.")
-
-
-class UserConfig(BaseModel):
-    """User-level sandbox configuration (flat, single-agent oriented).
-
-    Loaded from the user's global config file and the working directory's
-    `.agent-pod.yaml` (project layer wins per key), then overridden by CLI flags.
-    All fields are optional. `agent` is the default agent for `ap run`; run-flag
-    fields mirror the CLI options; the remaining fields override the bundled
-    agent config of whichever agent is run (lists replace, dicts merge key-by-key).
-    """
-
-    agent: str | None = Field(
-        default=None,
-        description="Default agent for `ap run`/`build`/`sessions` when none is given on the CLI.",
-    )
-    profile: str | None = Field(
-        default=None, description="Default profile name for `ap run`/`plan`."
-    )
-    profiles: dict[str, ProfileConfig] = Field(
-        default_factory=dict,
-        description=(
-            "Named profiles: run-level overrides plus the `agent/<profile>/<id>` "
-            "branch namespace for auto-generated sessions."
-        ),
-    )
     session: str | None = Field(default=None, description="Default --session value.")
     ephemeral: bool | None = Field(
         default=None,
@@ -267,13 +256,6 @@ class UserConfig(BaseModel):
             "files reach the host. Default false: the working tree is mounted directly "
             "at /sandbox."
         ),
-    )
-    context_files: list[str] | None = Field(
-        default=None, description="Default --context-file entries (HOST_PATH[:NAME])."
-    )
-    settings_file: str | None = Field(default=None, description="Default --settings-file path.")
-    extra_args: list[str] | None = Field(
-        default=None, description="Default extra args forwarded to the agent."
     )
     flake: FlakeOverrides | None = Field(
         default=None, description="Override of the agent's `flake` config (see AgentConfig.flake)."
@@ -302,14 +284,6 @@ class UserConfig(BaseModel):
     image_tag: str | None = Field(default=None, description="See AgentConfig.image_tag")
     container_name: str | None = Field(default=None, description="See AgentConfig.container_name")
     container_home: str | None = Field(default=None, description="See AgentConfig.container_home")
-    files: list[FileMount] | None = Field(
-        default=None,
-        description=(
-            "Files/dirs to append to the agent's `files` (see AgentConfig.files). "
-            "Unlike other lists, user `files` are APPENDED to the bundled agent's, "
-            "so per-agent built-ins keep their position and your entries come after."
-        ),
-    )
     tmpfs_mounts: dict[str, str] | None = Field(
         default=None, description="See AgentConfig.tmpfs_mounts"
     )
@@ -324,3 +298,54 @@ class UserConfig(BaseModel):
         if isinstance(value, str):
             return [value]
         return value
+
+    def merged_with(self, overlay: "ProfileConfig") -> "ProfileConfig":
+        """Deep-merge `overlay` onto self (self is the baseline); a new config.
+
+        `overlay` wins per key. `files` is the one list that appends instead of
+        replacing — self's files stay first, overlay's come after — so a profile
+        adds mounts without dropping the baseline's (and a later mount at the
+        same container path replaces an earlier one).
+        """
+        merged = deep_merge(
+            self.model_dump(exclude_none=True), overlay.model_dump(exclude_none=True)
+        )
+        if overlay.files:
+            merged["files"] = [f.model_dump(exclude_none=True) for f in (self.files or [])] + [
+                f.model_dump(exclude_none=True) for f in overlay.files
+            ]
+        return ProfileConfig.model_validate(merged)
+
+
+class UserConfig(ProfileConfig):
+    """User-level sandbox configuration file: shared defaults + named profiles.
+
+    The top-level fields (inherited from ProfileConfig) are the baseline applied
+    to EVERY profile; a named profile's fields override that baseline per key.
+    Loaded from the user's global config file and the working directory's
+    `.agent-pod.yaml` (project layer wins per key), then overridden by CLI flags.
+    All fields are optional.
+    """
+
+    profile: str | None = Field(
+        default=None, description="Default profile name for `ap run`/`plan`."
+    )
+    profiles: dict[str, ProfileConfig] = Field(
+        default_factory=dict,
+        description=(
+            "Named profiles: overrides on top of the top-level defaults, plus the "
+            "`agent/<profile>/<id>` branch namespace for auto-generated sessions."
+        ),
+    )
+
+    def effective(self, name: str) -> ProfileConfig:
+        """Resolve `name` to its complete config: defaults overlaid with the profile.
+
+        The top-level fields are applied to all configs; `profiles[name]` (if it
+        exists, incl. a `default` profile) overrides per key. Result is a full
+        `ProfileConfig` that resolves into a concrete `AgentConfig`.
+        """
+        baseline = self.model_dump(exclude_none=True, exclude={"profile", "profiles"})
+        return ProfileConfig.model_validate(baseline).merged_with(
+            self.profiles.get(name, ProfileConfig())
+        )
