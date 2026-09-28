@@ -17,6 +17,10 @@ profiles:
         permissions: rw
         description: host skills dir (read/write; writes flow back to host)
 ephemeral: true
+# Forwarded into the container via `-e`; `ap run`/`ap shell` refuse to launch if
+# a listed var isn't set in this shell. Unset/set it to exercise both branches.
+passthrough_envs:
+- OPENAI_API_KEY
 extra_packages:
 - uv
 - ty
