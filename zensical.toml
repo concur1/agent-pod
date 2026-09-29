@@ -15,7 +15,6 @@ nav = [
     "guides/git.md",
     "guides/skills.md",
     "guides/recipes.md",
-    "guides/contribute.md",
   ] },
   { "Reference" = [
     "reference/cli.md",

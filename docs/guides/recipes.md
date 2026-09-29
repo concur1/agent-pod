@@ -17,17 +17,6 @@ defines them all — here are a few shapes that work out of the box:
         agent: pi
     ```
 
-=== "daily"
-
-    A fast loop — trusted repo, auto-commit style:
-
-    ```yaml
-    profiles:
-      daily:
-        agent: pi
-        extra_args: ["--no-approval"]
-    ```
-
 === "skills"
 
     Read/write access to the agent's skills dir via a seeded copy in session
@@ -45,27 +34,41 @@ defines them all — here are a few shapes that work out of the box:
             description: your skills dir (seeded copy; writes kept in session state)
     ```
 
-=== "grunt"
+=== "infra"
 
-    A different agent for mechanical tasks (or one pinned to a cheaper model):
-
-    ```yaml
-    profiles:
-      grunt:
-        agent: opencode
-        extra_args: ["--model", "fast"]
-    ```
-
-=== "audit"
-
-    Mount context docs read-only for review-heavy work:
+    Infrastructure work behind a **downscoped** GCP token, minted per-task
+    with the Security Token Service — so a mistake can only touch the exact
+    resource the token scopes, never your ambient project credentials:
 
     ```yaml
     profiles:
-      audit:
-        agent: claude
-        context_files: [docs/spec.md, docs/api.md:api.md]
+      infra:
+        agent: pi
+        passthrough_envs: [GCP_ACCESS_TOKEN]
     ```
+
+    Mint the token with `gcloud iam downscoped-tokens` (scoping it to the
+    project/resource and roles the task needs), export it as
+    `GCP_ACCESS_TOKEN`, then run the profile. `passthrough_envs` is the
+    opt-in for env forwarding: no vars pass by default, and the run fails
+    loudly if the named var isn't set in your shell.
+
+=== "github-review"
+
+    PR review with a scoped GitHub token — a fine-grained PAT limited to the
+    repo(s) needing review, with read on pull requests and write on review
+    comments:
+
+    ```yaml
+    profiles:
+      github-review:
+        agent: pi
+        passthrough_envs: [GITHUB_TOKEN]
+    ```
+
+    Export it as `GITHUB_TOKEN` and run the profile — the agent can read PRs
+    and post reviews through `gh`/the API. Nothing else is forwarded, and the
+    run fails if the token isn't set.
 
 `ap list` lists what each profile does — `(active)` marks the config's
 `profile:` default, else `default`. Any option settable at the top level is
