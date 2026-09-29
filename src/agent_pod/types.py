@@ -69,6 +69,7 @@ class FileMount(BaseModel):
 
     source: str | None = Field(
         default=None,
+        examples=["~/dotfiles/aliases.sh"],
         description=(
             "Host file or folder to mount, or a `builtin:` generator id "
             "(`builtin:instructions`, `builtin:git-workflow`) for content agent-pod "
@@ -78,6 +79,7 @@ class FileMount(BaseModel):
     )
     name: str = Field(
         ...,
+        examples=[".bashrc.d/aliases.sh"],
         description=(
             "Mount name; the container path defaults to `<container_home>/<name>`. "
             "Slash-separated names nest (e.g. `skills/git-workflow/SKILL.md`)."
@@ -85,14 +87,17 @@ class FileMount(BaseModel):
     )
     permissions: Literal["ro", "rw"] = Field(
         ...,
+        examples=["ro", "rw"],
         description="Mount permissions: read-only (`ro`) or read/write (`rw`).",
     )
     description: str | None = Field(
         default=None,
+        examples=["shared aliases"],
         description="Human-readable description shown by `ap plan`.",
     )
     target: str | None = Field(
         default=None,
+        examples=["/etc/skills/SKILL.md"],
         description=(
             "Absolute container path override; defaults to `<container_home>/<name>` "
             "(e.g. opencode's auth.json lives outside its home)."
@@ -100,6 +105,7 @@ class FileMount(BaseModel):
     )
     optional: bool = Field(
         default=False,
+        examples=[True],
         description=(
             "Skip silently if the host `source` is missing (default False prints a "
             "warning and skips). Writable state entries are always created."
@@ -107,6 +113,7 @@ class FileMount(BaseModel):
     )
     context: bool = Field(
         default=False,
+        examples=[True],
         description=(
             "Treat the file as a context file: mounted read-only into the shared "
             "contexts dir, listed in the generated instructions, and passed to pi "
@@ -117,6 +124,7 @@ class FileMount(BaseModel):
     )
     seed: bool = Field(
         default=False,
+        examples=[True],
         description=(
             "For read/write files: copy the host `source` into the session state "
             "dir on first run, then mount the copy writable so the host file is "
@@ -125,10 +133,12 @@ class FileMount(BaseModel):
     )
     secret: bool = Field(
         default=False,
+        examples=[True],
         description="Flag the mount as `[secret]` in `ap plan`; values never shown.",
     )
     type: Literal["file", "dir"] | None = Field(
         default=None,
+        examples=["file", "dir"],
         description=(
             "Explicit file/dir kind for writable state entries; inferred when "
             "omitted (`file` when `seed` is set, otherwise from the source's type "
@@ -206,14 +216,24 @@ class AgentConfig(BaseModel):
 class FlakeOverrides(BaseModel):
     """All-optional mirror of FlakeConfig so user configs can override any subset."""
 
-    dir: str | None = Field(default=None, description="See FlakeConfig.dir")
+    dir: str | None = Field(
+        default=None,
+        examples=["config/agents/pi"],
+        description="See FlakeConfig.dir",
+    )
     extra_packages: list[str] | None = Field(
         default=None,
+        examples=[["uv", "jq"]],
         description="See FlakeConfig.extra_packages",
     )
-    allow_unfree: bool | None = Field(default=None, description="See FlakeConfig.allow_unfree")
+    allow_unfree: bool | None = Field(
+        default=None,
+        examples=[True],
+        description="See FlakeConfig.allow_unfree",
+    )
     permitted_insecure: list[str] | None = Field(
         default=None,
+        examples=[["openssl-1.1.1w"]],
         description="See FlakeConfig.permitted_insecure",
     )
 
@@ -231,25 +251,40 @@ class ProfileConfig(BaseModel):
 
     agent: str | None = Field(
         default=None,
+        examples=["pi"],
         description="Default agent for `ap run`/`build`/`sessions` when none is given on the CLI.",
     )
     context_files: list[str] | None = Field(
-        default=None, description="Default `--context-file` entries (HOST_PATH[:NAME])."
+        default=None,
+        examples=[["docs/notes.md", "docs/api.md:api.md"]],
+        description="Default `--context-file` entries (HOST_PATH[:NAME]).",
     )
     files: list[FileMount] | None = Field(
         default=None,
+        examples=[[{"name": "spec.md", "permissions": "ro"}]],
         description=(
             "File/dir mounts appended to the agent's `files` (see AgentConfig.files); a "
             "later mount at the same container path replaces an earlier one."
         ),
     )
     extra_args: list[str] | None = Field(
-        default=None, description="Default extra args forwarded to the agent."
+        default=None,
+        examples=[["--model", "sonnet"]],
+        description="Default extra args forwarded to the agent.",
     )
-    settings_file: str | None = Field(default=None, description="Default `--settings-file` path.")
-    session: str | None = Field(default=None, description="Default --session value.")
+    settings_file: str | None = Field(
+        default=None,
+        examples=["~/.pi/settings.json"],
+        description="Default `--settings-file` path.",
+    )
+    session: str | None = Field(
+        default=None,
+        examples=["dev"],
+        description="Default --session value.",
+    )
     ephemeral: bool | None = Field(
         default=None,
+        examples=[True],
         description=(
             "Ephemeral git sessions: in a git repo, mount the .git read-write so the "
             "container creates its own per-session worktree on it — only committed "
@@ -258,10 +293,13 @@ class ProfileConfig(BaseModel):
         ),
     )
     flake: FlakeOverrides | None = Field(
-        default=None, description="Override of the agent's `flake` config (see AgentConfig.flake)."
+        default=None,
+        examples=[{"extra_packages": ["uv", "jq"], "allow_unfree": True}],
+        description="Override of the agent's `flake` config (see AgentConfig.flake).",
     )
     extra_packages: list[str] | None = Field(
         default=None,
+        examples=[["uv", "jq"]],
         description=(
             "Nix packages to add to the agent's flake image (shorthand for "
             "`flake.extra_packages`, so it applies to whichever agent is run). "
@@ -270,25 +308,43 @@ class ProfileConfig(BaseModel):
     )
     allow_unfree: bool | None = Field(
         default=None,
+        examples=[True],
         description=(
             "Shorthand for `flake.allow_unfree`: allow unfree nixpkgs packages in the agent image."
         ),
     )
     permitted_insecure: list[str] | None = Field(
         default=None,
+        examples=[["openssl-1.1.1w"]],
         description=(
             "Shorthand for `flake.permitted_insecure`: exact nixpkgs package "
             "versions allowed despite being marked insecure."
         ),
     )
-    image_tag: str | None = Field(default=None, description="See AgentConfig.image_tag")
-    container_name: str | None = Field(default=None, description="See AgentConfig.container_name")
-    container_home: str | None = Field(default=None, description="See AgentConfig.container_home")
+    image_tag: str | None = Field(
+        default=None,
+        examples=["localhost/pi-sandbox:latest"],
+        description="See AgentConfig.image_tag",
+    )
+    container_name: str | None = Field(
+        default=None,
+        examples=["pi-sandbox-instance"],
+        description="See AgentConfig.container_name",
+    )
+    container_home: str | None = Field(
+        default=None,
+        examples=["/sandbox"],
+        description="See AgentConfig.container_home",
+    )
     tmpfs_mounts: dict[str, str] | None = Field(
-        default=None, description="See AgentConfig.tmpfs_mounts"
+        default=None,
+        examples=[{"/tmp": "rw,exec,size=512m"}],
+        description="See AgentConfig.tmpfs_mounts",
     )
     passthrough_envs: list[str] | None = Field(
-        default=None, description="See AgentConfig.passthrough_envs"
+        default=None,
+        examples=[["MY_API_KEY"]],
+        description="See AgentConfig.passthrough_envs",
     )
 
     @field_validator("extra_packages", mode="before")
@@ -328,10 +384,13 @@ class UserConfig(ProfileConfig):
     """
 
     profile: str | None = Field(
-        default=None, description="Default profile name for `ap run`/`plan`."
+        default=None,
+        examples=["fixes"],
+        description="Default profile name for `ap run`/`plan`.",
     )
     profiles: dict[str, ProfileConfig] = Field(
         default_factory=dict,
+        examples=[{"fixes": {"agent": "pi", "extra_args": ["--no-approval"]}}],
         description=(
             "Named profiles: overrides on top of the top-level defaults, plus the "
             "`agent/<profile>/<id>` branch namespace for auto-generated sessions."

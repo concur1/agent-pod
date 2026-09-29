@@ -1,8 +1,8 @@
 """Generate the config reference section of ``docs/reference/config.md``.
 
 Introspects the Pydantic config models in ``agent_pod.types`` and renders every
-field (key, type, default, description) into the generated block of the
-reference doc, so the docs can't drift from the validator.
+field (key, type, default, example, description) into the generated block of
+the reference doc, so the docs can't drift from the validator.
 
 Run with ``uv run python -m agent_pod.gen_config_docs`` (or ``make docs-ref``).
 """
@@ -69,15 +69,23 @@ def render_default(field: FieldInfo) -> str:
     return json.dumps(field.get_default(call_default_factory=True), sort_keys=True)
 
 
+def render_example(value: Any) -> str:
+    """Render a single example value as an inline-code cell."""
+    text = value if isinstance(value, str) else json.dumps(value, sort_keys=True)
+    escaped = text.replace("|", "\\|")
+    return f"`{escaped}`"
+
+
 def render_table(model: type[BaseModel]) -> str:
     """Render one model's fields as a markdown table."""
-    rows = ["| Key | Type | Default | Description |", "|---|---|---|---|"]
+    rows = ["| Key | Type | Default | Example | Description |", "|---|---|---|---|---|"]
     for name, field in model.model_fields.items():
         default = render_default(field) or "—"
+        examples = "<br>".join(render_example(ex) for ex in field.examples) or "—"
         column_type = render_type(field.annotation).replace("|", "\\|")
         description = field.description or ""
         description = " ".join(description.split()).replace("|", "\\|")
-        rows.append(f"| `{name}` | `{column_type}` | `{default}` | {description} |")
+        rows.append(f"| `{name}` | `{column_type}` | `{default}` | {examples} | {description} |")
     return "\n".join(rows)
 
 
