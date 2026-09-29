@@ -7,7 +7,12 @@ import pytest
 from agent_pod.config import get_effective_agent_config
 from agent_pod.container.runner import Mount
 from agent_pod.plan import EnvVar, Plan, build_plan, render_plan
-from agent_pod.types import FileMount
+from agent_pod.types import FileMount, PassthroughEnv
+
+
+def _envs(*names: str) -> list[PassthroughEnv]:
+    """Passthrough env declarations with a generated description per name."""
+    return [PassthroughEnv(name=n, description=f"token for {n}") for n in names]
 
 
 @pytest.fixture
@@ -72,7 +77,7 @@ class TestBuildPlan:
         # explicitly opts into, flagging secrets inline as [secret].
         passthrough_config(
             "opencode",
-            passthrough_envs=["OPENAI_API_KEY", "EXAMPLE_TOKEN", "EXAMPLE_PROJECT_ID"],
+            passthrough_envs=_envs("OPENAI_API_KEY", "EXAMPLE_TOKEN", "EXAMPLE_PROJECT_ID"),
         )
 
         plan = build_plan(agent="opencode", env={"OPENAI_API_KEY": "v", "EXAMPLE_PROJECT_ID": "p"})
@@ -136,7 +141,9 @@ class TestBuildPlan:
         assert not any(e.internal for e in plan.envs)
 
     def test_passthrough_envs_report_forwarded_status(self, isolated, passthrough_config):
-        passthrough_config("pi", passthrough_envs=["HF_TOKEN", "EXAMPLE_TOKEN", "OPENAI_API_KEY"])
+        passthrough_config(
+            "pi", passthrough_envs=_envs("HF_TOKEN", "EXAMPLE_TOKEN", "OPENAI_API_KEY")
+        )
         plan = build_plan(agent="pi", env={"HF_TOKEN": "h", "EXAMPLE_TOKEN": "s"})
         status = {e.name: e.forwarded for e in plan.envs}
         assert status["HF_TOKEN"] is True
@@ -240,12 +247,42 @@ class TestRenderPlan:
         out = render_plan(plan, color=True)
         assert "\033[31m  [secret]\033[0m" in out
 
+    def test_generated_instructions_describe_sandbox_access(self, isolated, passthrough_config):
+        """The generated AGENTS.md lists mounts (secrets flagged), forwarded env
+        vars with descriptions, and the network posture — the agent's readable
+        picture of what it can touch."""
+        host_auth = isolated / ".local" / "share" / "opencode" / "auth.json"
+        host_auth.parent.mkdir(parents=True)
+        host_auth.write_text('{"example": {"key": "k"}}\n')
+        passthrough_config(
+            "opencode",
+            passthrough_envs=_envs("OPENAI_API_KEY", "EXAMPLE_PROJECT_ID"),
+        )
+
+        build_plan(agent="opencode", env={"OPENAI_API_KEY": "v"})
+        content = (isolated / "state" / "prompts" / "opencode-instructions.md").read_text()
+        assert "Sandbox access" in content
+        assert "/sandbox — read/write — Your repository" in content
+        assert "auth.json — read/write [secret]" in content
+        assert "Full outbound (default bridge) network, host network disabled" in content
+        assert "OPENAI_API_KEY [secret] — token for OPENAI_API_KEY" in content
+        # A declared env absent from the launching shell is shown as not forwarded.
+        missing = "EXAMPLE_PROJECT_ID — token for EXAMPLE_PROJECT_ID (not set — not forwarded)"
+        assert missing in content
+
+    def test_env_descriptions_rendered_in_plan(self, isolated, passthrough_config):
+        passthrough_config("pi", passthrough_envs=_envs("HF_TOKEN"))
+        plan = build_plan(agent="pi", env={"HF_TOKEN": "h"})
+        out = render_plan(plan, color=False)
+        assert "forwarded (set in this shell)" in out
+        assert "· token for HF_TOKEN" in out
+
     def test_secret_values_never_leak(self, isolated, passthrough_config):
         secret_value = "super-secret-value-xyz"
         host_auth = isolated / ".local" / "share" / "opencode" / "auth.json"
         host_auth.parent.mkdir(parents=True)
         host_auth.write_text(f'{{"example": {{"key": "{secret_value}"}}}}\n')
-        passthrough_config("opencode", passthrough_envs=["EXAMPLE_TOKEN"])
+        passthrough_config("opencode", passthrough_envs=_envs("EXAMPLE_TOKEN"))
         plan = build_plan(agent="opencode", env={"EXAMPLE_TOKEN": secret_value})
         out = render_plan(plan, color=False)
         assert "[secret]" in out

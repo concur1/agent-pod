@@ -39,7 +39,7 @@ The top level of a config file accepts every key below; all but `profile`/`profi
 | `container_name` | `str \| null` | `null` | See AgentConfig.container_name |
 | `container_home` | `str \| null` | `null` | See AgentConfig.container_home |
 | `tmpfs_mounts` | `dict[str, str] \| null` | `null` | See AgentConfig.tmpfs_mounts |
-| `passthrough_envs` | `list[str] \| null` | `null` | See AgentConfig.passthrough_envs |
+| `passthrough_envs` | `list[PassthroughEnv] \| null` | `null` | See AgentConfig.passthrough_envs |
 | `profile` | `str \| null` | `null` | Default profile name for `ap run`/`plan`. |
 | `profiles` | `dict[str, ProfileConfig]` | `{}` | Named profiles: overrides on top of the top-level defaults, plus the `agent/<profile>/<id>` branch namespace for auto-generated sessions. |
 
@@ -59,6 +59,15 @@ Each entry of the `files` list.
 | `seed` | `bool` | `false` | For read/write files: copy the host `source` into the session state dir on first run, then mount the copy writable so the host file is never modified. |
 | `secret` | `bool` | `false` | Flag the mount as `[secret]` in `ap plan`; values never shown. |
 | `type` | `file \| dir \| null` | `null` | Explicit file/dir kind for writable state entries; inferred when omitted (`file` when `seed` is set, otherwise from the source's type or the name's extension). |
+
+### `passthrough_envs` entries
+
+Each entry of the `passthrough_envs` list; every forwarded variable needs a description so the generated agent instructions can say what it grants.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `name` | `str` | `—` | Environment variable name to forward from the host into the container. |
+| `description` | `str` | `—` | Human-readable description of what the variable is for; required, so the generated agent instructions and `ap plan` can tell the agent what each forwarded credential grants and whether it is a secret. |
 
 ### `flake` entries
 
@@ -127,7 +136,9 @@ at the repo root is the fully-commented, pasteable version.
       - jq
     allow_unfree: true                           # (2)!
     permitted_insecure: [openssl-1.1.1w]         # (3)!
-    passthrough_envs: [MY_API_KEY]               # (4)!
+    passthrough_envs:                           # (4)!
+      - name: MY_API_KEY
+        description: API key for the my.example service
     image_tag: localhost/opencode-sandbox:latest # (5)!
     tmpfs_mounts:                                # (6)!
       /tmp: rw,exec,size=512m
@@ -141,7 +152,10 @@ at the repo root is the fully-commented, pasteable version.
        (default: deny — an agent sandbox executes potentially untrusted code).
     4. Opt-in to forwarding these env vars into the sandbox; no vars are
        forwarded by default, so `ap plan` won't list unused API keys unless
-       you ask for them.
+       you ask for them. Each entry is a `name` plus a **required**
+       `description` (shown in `ap plan` and in the generated agent
+       instructions, so the agent understands what each forwarded value is
+       for).
     5. Override the built image tag.
     6. Extra tmpfs mounts.
 
@@ -187,7 +201,11 @@ The config can override any `AgentConfig` field as a flat key (`flake`,
 `passthrough_envs`). Notably:
 
 - `passthrough_envs` is the opt-in for env forwarding — no vars are forwarded
-  by default.
+  by default, and each entry requires a `name` and a `description` (the
+  description feeds `ap plan` and the generated agent instructions).
+- The generated instructions (mounted as the agent's AGENTS.md) tell the
+  agent what it can reach: its mounts (secrets flagged), the forwarded env
+  vars with their descriptions, and the network posture.
 - `extra_packages` adds runtime tooling (e.g. `uv`) to the agent's flake
   image; it was removed from the bundled agent configs, so the user config is
   the source of truth for it. Overrides apply to whatever agent is run, so a

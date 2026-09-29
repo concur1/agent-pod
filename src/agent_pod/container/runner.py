@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 BUILTIN_INSTRUCTIONS = "builtin:instructions"
 BUILTIN_GIT_WORKFLOW = "builtin:git-workflow"
 
+# Env vars whose name looks like a credential are treated as secrets.
+SECRET_ENV_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
+
 BASE_STATE_DIR = Path.home() / STATE_DIR
 
 # Container paths shared by every agent (not per-agent configurable).
@@ -353,8 +356,19 @@ def ensure_host_paths(
 
 
 def _instructions_content(
-    skill_container_path: str | None, context_entries: list[FileMount]
+    skill_container_path: str | None,
+    context_entries: list[FileMount],
+    config: AgentConfig,
+    mounts: list[Mount],
+    security: SecurityProfile,
+    env: Mapping[str, str],
 ) -> str:
+    """The generated AGENTS.md: git-workflow conventions plus the sandbox's grants.
+
+    The agent reads the same launch screen `ap plan` shows, so it understands
+    what it can touch: mounts (with secrets flagged), forwarded env vars with
+    their descriptions, and the network posture.
+    """
     lines = [
         "# Agent instructions",
         "",
@@ -375,6 +389,31 @@ def _instructions_content(
     lines.extend(["", "## Context files", ""])
     for entry in context_entries:
         lines.append(f"@{CONTEXTS_CONTAINER_DIR}/{entry.name}")
+
+    network = "Full outbound (default bridge)" if security.network == "full" else "No outbound"
+    host_net = "enabled" if security.host_network else "disabled"
+    lines.extend(["", "## Sandbox access", "", f"{network} network, host network {host_net}.", ""])
+
+    lines.extend(["### Files & secrets", ""])
+    listed = [
+        m for m in mounts if not m.tmpfs and m.kind not in ("gitconfig", "instructions", "skill")
+    ]
+    for mount in listed:
+        word = "read/write" if mount.mode == "rw" else "read-only"
+        secret = " [secret]" if mount.secret else ""
+        suffix = f" — {mount.description}" if mount.description else ""
+        lines.append(f"- {mount.container_path} — {word}{secret}{suffix}")
+    if not listed:
+        lines.append("- (none)")
+
+    lines.extend(["", "### Environment variables", ""])
+    for entry in config.passthrough_envs:
+        secret = " [secret]" if SECRET_ENV_RE.search(entry.name) else ""
+        status = "" if entry.name in env else " (not set — not forwarded)"
+        lines.append(f"- {entry.name}{secret} — {entry.description}{status}")
+    if not config.passthrough_envs:
+        lines.append("- (none — no environment variables are forwarded)")
+
     lines.append("")
     return "\n".join(lines)
 
@@ -395,6 +434,7 @@ def build_mounts(
     agent_host_dir: Path,
     prompts_dir: Path,
     ephemeral_repo: EphemeralRepo | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> list[Mount]:
     """Assemble every host mount and tmpfs the agent will get.
 
@@ -453,22 +493,8 @@ def build_mounts(
             )
             continue
         if entry.source == BUILTIN_INSTRUCTIONS:
-            prompts_dir.mkdir(parents=True, exist_ok=True)
-            host = prompts_dir / f"{agent_name}-instructions.md"
-            host.write_text(
-                _instructions_content(
-                    _builtin_container_path(config, BUILTIN_GIT_WORKFLOW), context_entries
-                )
-            )
-            mounts.append(
-                Mount(
-                    host_path=host,
-                    container_path=container_path,
-                    mode="ro",
-                    kind="instructions",
-                    description=entry.description,
-                )
-            )
+            # Generated after the full mount list is assembled, so it can describe
+            # the whole sandbox (mounts, env vars, network).
             continue
         if entry.source == BUILTIN_GIT_WORKFLOW:
             prompts_dir.mkdir(parents=True, exist_ok=True)
@@ -557,6 +583,30 @@ def build_mounts(
             )
         )
 
+    instructions_entry = next((e for e in config.files if e.source == BUILTIN_INSTRUCTIONS), None)
+    if instructions_entry is not None:
+        prompts_dir.mkdir(parents=True, exist_ok=True)
+        host = prompts_dir / f"{agent_name}-instructions.md"
+        host.write_text(
+            _instructions_content(
+                _builtin_container_path(config, BUILTIN_GIT_WORKFLOW),
+                context_entries,
+                config,
+                mounts,
+                SecurityProfile(),
+                os.environ if env is None else env,
+            )
+        )
+        mounts.append(
+            Mount(
+                host_path=host,
+                container_path=config.file_container_path(instructions_entry),
+                mode="ro",
+                kind="instructions",
+                description=instructions_entry.description,
+            )
+        )
+
     return _finalize_mounts(mounts)
 
 
@@ -621,7 +671,7 @@ def _fold_mount_into_dir(mount: Mount, parent: Mount) -> None:
 
 def missing_passthrough_envs(config: AgentConfig, env: Mapping[str, str]) -> list[str]:
     """Declared `passthrough_envs` names that aren't set in `env`."""
-    return [key for key in config.passthrough_envs if key not in env]
+    return [entry.name for entry in config.passthrough_envs if entry.name not in env]
 
 
 def _podman_command(
@@ -662,9 +712,9 @@ def _podman_command(
         else:
             cmd += ["-v", f"{mount.host_path}:{mount.container_path}:{mount.mode},z"]
 
-    for env_key in config.passthrough_envs:
-        if env_key in env:
-            cmd += ["-e", env_key]
+    for entry in config.passthrough_envs:
+        if entry.name in env:
+            cmd += ["-e", entry.name]
 
     for env_key, env_value in (internal_env or {}).items():
         cmd += ["-e", f"{env_key}={env_value}"]

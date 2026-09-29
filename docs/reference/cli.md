@@ -77,8 +77,8 @@ launch it:
   in red and values are never shown.
 - **Environment variables** lists agent-pod's own internal vars by default
   (no env vars are forwarded by default); with `passthrough_envs` it lists
-  those with a live forwarded/not-forwarded status, flagging secret-looking
-  names with `[secret]`.
+  those with a live forwarded/not-forwarded status and their config
+  `description`, flagging secret-looking names with `[secret]`.
 - **Network & capabilities** truthfully reports the sandbox's posture
   (currently full outbound, host network disabled, podman default
   capabilities).

@@ -17,7 +17,7 @@ from typing import Any, Literal, Union, get_args, get_origin
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from agent_pod.types import FileMount, FlakeOverrides, UserConfig
+from agent_pod.types import FileMount, FlakeOverrides, PassthroughEnv, UserConfig
 
 MARKER_START = "<!-- generated:config-keys:start -->"
 MARKER_END = "<!-- generated:config-keys:end -->"
@@ -33,6 +33,13 @@ GROUPS: list[tuple[str, str, type[BaseModel]]] = [
         UserConfig,
     ),
     ("`files` entries", "Each entry of the `files` list.", FileMount),
+    (
+        "`passthrough_envs` entries",
+        "Each entry of the `passthrough_envs` list; every forwarded variable "
+        "needs a description so the generated agent instructions can say what "
+        "it grants.",
+        PassthroughEnv,
+    ),
     ("`flake` entries", "`flake` overrides the agent's flake config.", FlakeOverrides),
 ]
 

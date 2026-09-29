@@ -161,6 +161,25 @@ class FileMount(BaseModel):
         return "file" if Path(self.name).suffix else "dir"
 
 
+class PassthroughEnv(BaseModel):
+    """An environment variable forwarded from the host into the sandbox."""
+
+    name: str = Field(
+        ...,
+        examples=["HF_TOKEN"],
+        description="Environment variable name to forward from the host into the container.",
+    )
+    description: str = Field(
+        ...,
+        examples=["Hugging Face token for model downloads"],
+        description=(
+            "Human-readable description of what the variable is for; required, so "
+            "the generated agent instructions and `ap plan` can tell the agent what "
+            "each forwarded credential grants and whether it is a secret."
+        ),
+    )
+
+
 class AgentConfig(BaseModel):
     """Runtime configuration for an agent container."""
 
@@ -192,9 +211,12 @@ class AgentConfig(BaseModel):
         default_factory=dict,
         description="RAM-backed tmpfs mounts (container_path -> mount_options)",
     )
-    passthrough_envs: list[str] = Field(
+    passthrough_envs: list[PassthroughEnv] = Field(
         default_factory=list,
-        description="Environment variables to pass through from host to container",
+        description=(
+            "Environment variables to pass through from host to container, each with "
+            "a required description so the agent understands what the value grants."
+        ),
     )
 
     @property
@@ -341,9 +363,9 @@ class ProfileConfig(BaseModel):
         examples=[{"/tmp": "rw,exec,size=512m"}],
         description="See AgentConfig.tmpfs_mounts",
     )
-    passthrough_envs: list[str] | None = Field(
+    passthrough_envs: list[PassthroughEnv] | None = Field(
         default=None,
-        examples=[["MY_API_KEY"]],
+        examples=[[{"name": "MY_API_KEY", "description": "API key for the my.example service"}]],
         description="See AgentConfig.passthrough_envs",
     )
 

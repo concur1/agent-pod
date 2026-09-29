@@ -138,6 +138,10 @@ and `[secret]` on secret-looking names. A final NETWORK & CAPABILITIES section
 states the sandbox's network and capability posture, driven by the runner's
 actual flags (currently none, so it truthfully reports full outbound network
 and podman's default capabilities — see `SecurityProfile` in `runner.py`).
+The same picture is written into the generated agent instructions: the
+sandbox's mounts (secrets flagged), forwarded env vars with their config
+`description`s, and the network posture, so the agent understands its own
+permissions.
 
 ## Run (`runner.py`)
 
@@ -184,9 +188,18 @@ always frees the container.
 - **Env passthrough (opt-in)** — no environment variables are forwarded by
   default, so `ap plan` never lists a wall of unused API keys. If an agent needs
   one, add `passthrough_envs` to your own config (project or user layer), e.g.
-  `passthrough_envs: [MY_API_KEY]`; every listed variable must be set in the
-  launching shell or `ap run`/`ap shell` refuses to start (listing the missing
-  ones), then injects each via `-e`. This is a deliberate
+
+  ```yaml
+  passthrough_envs:
+    - name: MY_API_KEY
+      description: API key for the my.example service
+  ```
+
+  Each entry is a `name` plus a **required** `description` — the description
+  appears in `ap plan` and in the generated agent instructions, so the agent
+  knows what each forwarded value grants. Every listed variable must be set in
+  the launching shell or `ap run`/`ap shell` refuses to start (listing the
+  missing ones), then injects each via `-e`. This is a deliberate
   trade-off for a local dev tool: the agent process can read those keys. For
   workloads where agents must never hold credentials, see the
   credential-brokering architecture in

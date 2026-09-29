@@ -7,6 +7,7 @@ import yaml
 
 from agent_pod.config import get_effective_agent_config, get_user_config
 from agent_pod.config.loader import CONFIG_NAME
+from agent_pod.types import PassthroughEnv
 
 
 @pytest.fixture
@@ -86,14 +87,14 @@ class TestGetUserConfig:
         _write(
             isolated_paths,
             f".config/container-agents/{CONFIG_NAME}",
-            yaml.safe_dump({"passthrough_envs": ["A"]}),
+            yaml.safe_dump({"passthrough_envs": [{"name": "A", "description": "var A"}]}),
         )
         _write(
             isolated_paths,
             CONFIG_NAME,
-            yaml.safe_dump({"passthrough_envs": ["B"]}),
+            yaml.safe_dump({"passthrough_envs": [{"name": "B", "description": "var B"}]}),
         )
-        assert get_user_config().passthrough_envs == ["B"]
+        assert get_user_config().passthrough_envs == [PassthroughEnv(name="B", description="var B")]
 
     def test_unknown_default_agent_warns(self, isolated_paths, capsys):
         _write(
@@ -200,11 +201,19 @@ class TestGetEffectiveAgentConfig:
         _write(
             isolated_paths,
             f".config/container-agents/{CONFIG_NAME}",
-            yaml.safe_dump({"passthrough_envs": ["SCALAWAY_TOKEN"]}),
+            yaml.safe_dump(
+                {
+                    "passthrough_envs": [
+                        {"name": "SCALAWAY_TOKEN", "description": "scalaway access token"}
+                    ]
+                }
+            ),
         )
         config = get_effective_agent_config("opencode")
         # Replace semantics: bundled passthrough list is fully replaced.
-        assert config.passthrough_envs == ["SCALAWAY_TOKEN"]
+        assert config.passthrough_envs == [
+            PassthroughEnv(name="SCALAWAY_TOKEN", description="scalaway access token")
+        ]
 
     def test_user_files_append_to_bundled(self, isolated_paths):
         _write(
@@ -259,6 +268,18 @@ class TestGetEffectiveAgentConfig:
         with pytest.raises(ValueError, match="Input should be a valid string"):
             get_effective_agent_config("opencode")
 
+    def test_passthrough_env_requires_description(self, isolated_paths):
+        _write(
+            isolated_paths,
+            f".config/container-agents/{CONFIG_NAME}",
+            yaml.safe_dump({"passthrough_envs": [{"name": "MY_API_KEY"}]}),
+        )
+        # Every passthrough env must carry a description (it feeds the generated
+        # agent instructions), so a bare name is rejected at load time.
+        with pytest.raises(ValueError, match="Invalid user config") as exc:
+            get_user_config()
+        assert "passthrough_envs" in str(exc.value)
+
 
 class TestProfileEffectiveConfig:
     def test_profile_config_reaches_agent_config(self, isolated_paths):
@@ -274,7 +295,9 @@ class TestProfileEffectiveConfig:
                     "profiles": {
                         "env-prod": {
                             "agent": "pi",
-                            "passthrough_envs": ["AWS_ACCESS_KEY_ID"],
+                            "passthrough_envs": [
+                                {"name": "AWS_ACCESS_KEY_ID", "description": "aws access key"}
+                            ],
                             "tmpfs_mounts": {"/root/.cache": "size=512m"},
                             "extra_packages": ["pulumi"],
                             "files": [{"name": "prod-secrets", "permissions": "rw", "seed": True}],
@@ -285,7 +308,9 @@ class TestProfileEffectiveConfig:
         )
         eff = get_user_config().effective("env-prod")
         config = get_effective_agent_config("pi", eff)
-        assert config.passthrough_envs == ["AWS_ACCESS_KEY_ID"]
+        assert config.passthrough_envs == [
+            PassthroughEnv(name="AWS_ACCESS_KEY_ID", description="aws access key")
+        ]
         # Profile tmpfs is merged onto the bundled default mount.
         assert config.tmpfs_mounts["/root/.cache"] == "size=512m"
         assert config.flake.extra_packages == ["pulumi"]
@@ -302,12 +327,14 @@ class TestProfileEffectiveConfig:
             f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {
-                    "passthrough_envs": ["BASE_TOKEN"],
+                    "passthrough_envs": [{"name": "BASE_TOKEN", "description": "base token"}],
                     "extra_packages": ["curl"],
                     "files": [{"name": "base.md", "permissions": "ro"}],
                     "profiles": {
                         "extended": {
-                            "passthrough_envs": ["EXTRA_TOKEN"],
+                            "passthrough_envs": [
+                                {"name": "EXTRA_TOKEN", "description": "extra token"}
+                            ],
                             "files": [{"name": "extra.md", "permissions": "ro"}],
                         }
                     },
@@ -317,13 +344,17 @@ class TestProfileEffectiveConfig:
         user_cfg = get_user_config()
         # A profile with no overrides inherits the baseline wholesale.
         bare = get_effective_agent_config("opencode", user_cfg.effective("default"))
-        assert bare.passthrough_envs == ["BASE_TOKEN"]
+        assert bare.passthrough_envs == [
+            PassthroughEnv(name="BASE_TOKEN", description="base token")
+        ]
         assert bare.flake.extra_packages == ["curl"]
         assert bare.files[-1].name == "base.md"
         # The overriding profile replaces per key, and appends its files after
         # the baseline's.
         extended = get_effective_agent_config("opencode", user_cfg.effective("extended"))
-        assert extended.passthrough_envs == ["EXTRA_TOKEN"]  # overridden
+        assert extended.passthrough_envs == [
+            PassthroughEnv(name="EXTRA_TOKEN", description="extra token")
+        ]  # overridden
         assert extended.flake.extra_packages == ["curl"]  # inherited
         names = [f.name for f in extended.files]
         assert names.index("base.md") < names.index("extra.md")

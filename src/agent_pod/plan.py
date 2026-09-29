@@ -5,7 +5,6 @@ flagged `[secret]`, never shown.
 """
 
 import os
-import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -14,6 +13,7 @@ from pathlib import Path
 from agent_pod.config import get_effective_agent_config
 from agent_pod.container.runner import (
     BASE_STATE_DIR,
+    SECRET_ENV_RE,
     Mount,
     SecurityProfile,
     _ephemeral_env,
@@ -26,9 +26,6 @@ from agent_pod.utils.names import get_instance_name
 _RED = "\033[31m"
 _RESET = "\033[0m"
 
-# Env vars whose name looks like a credential are treated as secrets.
-_SECRET_ENV_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
-
 _ACCESS_WORDS = {"rw": "read/write", "ro": "read-only"}
 
 
@@ -37,6 +34,7 @@ class EnvVar:
     name: str
     forwarded: bool
     internal: bool = False
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +57,10 @@ def _display(path: Path | None) -> str:
 
 
 def build_envs(config, env: Mapping[str, str]) -> list[EnvVar]:
-    return [EnvVar(name=key, forwarded=key in env) for key in config.passthrough_envs]
+    return [
+        EnvVar(name=entry.name, forwarded=entry.name in env, description=entry.description)
+        for entry in config.passthrough_envs
+    ]
 
 
 def build_plan(
@@ -104,6 +105,7 @@ def build_plan(
         agent_host_dir=agent_host_dir,
         prompts_dir=prompts_dir,
         ephemeral_repo=ephemeral_repo,
+        env=env,
     )
     envs = build_envs(config, env)
     if ephemeral_repo is not None:
@@ -181,8 +183,11 @@ def render_plan(plan: Plan, *, color: bool = True) -> str:
             status = "forwarded (set in this shell)"
         else:
             status = "not set — not forwarded"
-        secret = _secret_tag(color) if _SECRET_ENV_RE.search(env.name) else ""
-        lines.append(f"  {env.name:<28} {status}{secret}")
+        secret = _secret_tag(color) if SECRET_ENV_RE.search(env.name) else ""
+        line = f"  {env.name:<28} {status}{secret}"
+        if env.description:
+            line += f"  · {env.description}"
+        lines.append(line)
 
     lines.extend(_render_security(plan.security, width))
     return "\n".join(lines)

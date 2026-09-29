@@ -17,7 +17,7 @@ from agent_pod.container.runner import (
     run_agent,
     tidy_noop_branches,
 )
-from agent_pod.types import FileMount
+from agent_pod.types import FileMount, PassthroughEnv
 
 
 def _config_with(agent: str, **updates):
@@ -298,7 +298,11 @@ class TestEnvPassthrough:
         # Env passthrough is opt-in; exercise it with a config that declares some.
         cfg = get_effective_agent_config("opencode").model_copy(
             update={
-                "passthrough_envs": ["EXAMPLE_TOKEN", "EXAMPLE_SECRET_KEY", "EXAMPLE_PROJECT_ID"]
+                "passthrough_envs": [
+                    PassthroughEnv(name="EXAMPLE_TOKEN", description="example token"),
+                    PassthroughEnv(name="EXAMPLE_SECRET_KEY", description="example secret"),
+                    PassthroughEnv(name="EXAMPLE_PROJECT_ID", description="example project"),
+                ]
             }
         )
         monkeypatch.setattr(
@@ -329,7 +333,11 @@ class TestEnvPassthrough:
         # Env passthrough is opt-in; exercise it with a config that declares some.
         cfg = get_effective_agent_config("opencode").model_copy(
             update={
-                "passthrough_envs": ["EXAMPLE_TOKEN", "EXAMPLE_SECRET_KEY", "EXAMPLE_PROJECT_ID"]
+                "passthrough_envs": [
+                    PassthroughEnv(name="EXAMPLE_TOKEN", description="example token"),
+                    PassthroughEnv(name="EXAMPLE_SECRET_KEY", description="example secret"),
+                    PassthroughEnv(name="EXAMPLE_PROJECT_ID", description="example project"),
+                ]
             }
         )
         monkeypatch.setattr(

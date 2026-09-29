@@ -44,14 +44,18 @@ defines them all — here are a few shapes that work out of the box:
     profiles:
       infra:
         agent: pi
-        passthrough_envs: [GCP_ACCESS_TOKEN]
+        passthrough_envs:
+          - name: GCP_ACCESS_TOKEN
+            description: downscoped GCP access token for this task
     ```
 
     Mint the token with `gcloud iam downscoped-tokens` (scoping it to the
     project/resource and roles the task needs), export it as
     `GCP_ACCESS_TOKEN`, then run the profile. `passthrough_envs` is the
     opt-in for env forwarding: no vars pass by default, and the run fails
-    loudly if the named var isn't set in your shell.
+    loudly if the named var isn't set in your shell. Each entry needs a
+    `name` and a `description` — the description is what the generated agent
+    instructions use to tell the agent what the value is for.
 
 === "github-review"
 
@@ -63,7 +67,9 @@ defines them all — here are a few shapes that work out of the box:
     profiles:
       github-review:
         agent: pi
-        passthrough_envs: [GITHUB_TOKEN]
+        passthrough_envs:
+          - name: GITHUB_TOKEN
+            description: fine-grained PAT for repo review permissions
     ```
 
     Export it as `GITHUB_TOKEN` and run the profile — the agent can read PRs

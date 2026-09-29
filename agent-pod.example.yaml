@@ -76,7 +76,11 @@
 #         description: your skills dir (seeded copy; writes kept in session state)
 #   prod:
 #     agent: pi
-#     passthrough_envs: [AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY]
+#     passthrough_envs:
+#       - name: AWS_ACCESS_KEY_ID
+#         description: AWS key for the infra account (downscoped per task)
+#       - name: AWS_SECRET_ACCESS_KEY
+#         description: AWS secret for the infra account
 #     extra_packages: [pulumi]
 
 # Agent-config overrides — flat top-level keys, applied to whichever agent is
@@ -94,7 +98,9 @@
 # container_home: /root/.config/opencode
 # tmpfs_mounts:
 #   /tmp: rw,exec,size=512m
-# passthrough_envs: [MY_API_KEY]
+# passthrough_envs:
+#   - name: MY_API_KEY
+#     description: API key for the my.example service
 
 # Files/dirs to add to the sandbox, in addition to the agent's own `files`.
 # Each entry:
