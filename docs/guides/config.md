@@ -9,7 +9,7 @@ hand. Config files are optional YAML read from your **global** directory and
 the **working directory**, letting you set defaults for run flags and override
 any agent setting without editing the bundled agent configs:
 
-- Global: `~/.config/container-agents/config.yaml`
+- Global: `~/.config/container-agents/.agent-pod.yaml`
 - Project: `.agent-pod.yaml` in the current working directory
 
 ## Create a config with `ap init`
@@ -27,7 +27,7 @@ ap init --force                # (3)!
 ```
 
 1. Answer a few questions; writes `./.agent-pod.yaml`.
-2. Write to `~/.config/container-agents/config.yaml` instead.
+2. Write to `~/.config/container-agents/.agent-pod.yaml` instead.
 3. Overwrite an existing target instead of refusing.
 
 If no config exists on **any level** (no global file *and* no project file),

@@ -18,11 +18,11 @@ from agent_pod.types import (
 
 logger = logging.getLogger(__name__)
 
-# User-level config files: a global one plus an optional per-project one in the
-# working directory. They are deep-merged (project wins) and then override the
-# bundled agent configs and CLI defaults.
-GLOBAL_CONFIG_NAME = "config.yaml"
-PROJECT_CONFIG_NAME = ".agent-pod.yaml"
+# User-level config files share one name everywhere: a per-user one under the
+# global state dir plus an optional per-project one in the working directory.
+# They are deep-merged (project wins) and then override the bundled agent
+# configs and CLI defaults.
+CONFIG_NAME = ".agent-pod.yaml"
 
 
 def _config_dir() -> Path:
@@ -37,12 +37,12 @@ def _global_config_dir() -> Path:
 
 def _project_config_path() -> Path:
     """Return the working-directory user config path."""
-    return Path.cwd() / PROJECT_CONFIG_NAME
+    return Path.cwd() / CONFIG_NAME
 
 
 def get_global_config_path() -> Path:
     """Return the user's global agent-pod config path."""
-    return _global_config_dir() / GLOBAL_CONFIG_NAME
+    return _global_config_dir() / CONFIG_NAME
 
 
 def get_project_config_path() -> Path:
@@ -87,7 +87,7 @@ def get_user_config() -> UserConfig:
         ValueError: If a user config file fails validation.
     """
     merged = UserConfig()
-    for path in (_global_config_dir() / GLOBAL_CONFIG_NAME, _project_config_path()):
+    for path in (_global_config_dir() / CONFIG_NAME, _project_config_path()):
         config = _load_user_config_file(path)
         if config is None:
             continue

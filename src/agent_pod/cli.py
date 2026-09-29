@@ -561,7 +561,7 @@ def main() -> None:
         default=None,
         help=(
             "Write to the project (.agent-pod.yaml) or global "
-            "(~/.config/container-agents/config.yaml) config without asking "
+            "(~/.config/container-agents/.agent-pod.yaml) config without asking "
             "(default: ask)."
         ),
     )

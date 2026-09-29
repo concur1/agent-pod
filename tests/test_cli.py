@@ -262,7 +262,7 @@ class TestRunUsesUserConfig:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         global_dir = tmp_path / ".config" / "container-agents"
         global_dir.mkdir(parents=True)
-        (global_dir / "config.yaml").write_text(
+        (global_dir / ".agent-pod.yaml").write_text(
             "agent: opencode\nsession: dev\ncontext_files:\n  - docs/notes.md\n"
             "extra_args: [--verbose]\n"
         )
@@ -318,7 +318,7 @@ class TestRunUsesUserConfig:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         global_dir = tmp_path / ".config" / "container-agents"
         global_dir.mkdir(parents=True)
-        (global_dir / "config.yaml").write_text("agent: nonexistent-agent\n")
+        (global_dir / ".agent-pod.yaml").write_text("agent: nonexistent-agent\n")
 
         with (
             patch.object(sys, "argv", ["ap", "run"]),
@@ -499,7 +499,7 @@ class TestInitSubcommand:
         _feed_input(monkeypatch, "", "pi", "", "")
         with patch.object(sys, "argv", ["ap", "init", "--target", "global"]):
             main()
-        cfg = isolated / ".config" / "container-agents" / "config.yaml"
+        cfg = isolated / ".config" / "container-agents" / ".agent-pod.yaml"
         assert cfg.exists()
         assert yaml.safe_load(cfg.read_text()) == {
             "agent": "pi",

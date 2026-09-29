@@ -4,7 +4,7 @@
 # interactively (and `ap run` auto-starts it on first use); extend the file
 # it creates with the options below as needed.
 #
-# Copy this to ~/.config/container-agents/config.yaml (global) or
+# Copy this to ~/.config/container-agents/.agent-pod.yaml (global) or
 # ./.agent-pod.yaml (per-project) and edit. Every key is optional; unset values
 # fall back to the bundled agent config / CLI defaults. Precedence:
 #

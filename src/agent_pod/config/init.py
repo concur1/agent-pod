@@ -7,7 +7,7 @@ choices. Every answer is validated against the
 ``UserConfig`` Pydantic model and re-prompted until it is valid, and each is
 written to the file. The file is written to either the
 project (``.agent-pod.yaml``) or global
-(``~/.config/container-agents/config.yaml``) level. ``ensure_user_config``
+(``~/.config/container-agents/.agent-pod.yaml``) level. ``ensure_user_config``
 wires this into ``ap run`` so a first-time user is walked through creating a
 config when none exists on any level.
 """

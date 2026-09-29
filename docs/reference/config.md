@@ -6,7 +6,7 @@ title: Config files
 
 Read from (in order of precedence):
 
-- Global: `~/.config/container-agents/config.yaml`
+- Global: `~/.config/container-agents/.agent-pod.yaml`
 - Project: `.agent-pod.yaml` in the current working directory
 
 Both files are validated with Pydantic using the same strategy as the bundled

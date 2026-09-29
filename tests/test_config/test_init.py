@@ -78,7 +78,7 @@ class TestWriteConfig:
         assert data["extra_packages"] == ["uv"]
 
     def test_creates_parent_dirs(self, tmp_path):
-        path = tmp_path / ".config" / "container-agents" / "config.yaml"
+        path = tmp_path / ".config" / "container-agents" / ".agent-pod.yaml"
         write_config(path, {"agent": "claude"})
         assert path.exists()
         assert yaml.safe_load(path.read_text())["agent"] == "claude"
@@ -236,7 +236,7 @@ class TestUserConfigPaths:
         assert user_config_paths() == []
         (isolated_paths / ".agent-pod.yaml").write_text("agent: pi\n")
         assert user_config_paths() == [get_project_config_path()]
-        global_cfg = isolated_paths / ".config" / "container-agents" / "config.yaml"
+        global_cfg = isolated_paths / ".config" / "container-agents" / ".agent-pod.yaml"
         global_cfg.parent.mkdir(parents=True)
         global_cfg.write_text("agent: pi\n")
         assert user_config_paths() == [get_global_config_path(), get_project_config_path()]
@@ -247,7 +247,7 @@ class TestEnsureUserConfig:
         (isolated_paths / ".agent-pod.yaml").write_text("agent: claude\n")
         assert ensure_user_config() is None
         # No config file created at the global level.
-        assert not (isolated_paths / ".config" / "container-agents" / "config.yaml").exists()
+        assert not (isolated_paths / ".config" / "container-agents" / ".agent-pod.yaml").exists()
 
     def test_warns_and_skips_when_non_interactive(self, isolated_paths, capsys, monkeypatch):
         _force_pipe(monkeypatch)

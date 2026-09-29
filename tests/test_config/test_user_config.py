@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from agent_pod.config import get_effective_agent_config, get_user_config
-from agent_pod.config.loader import GLOBAL_CONFIG_NAME, PROJECT_CONFIG_NAME
+from agent_pod.config.loader import CONFIG_NAME
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ class TestGetUserConfig:
     def test_global_config_loads_run_options(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {
                     "agent": "opencode",
@@ -54,7 +54,7 @@ class TestGetUserConfig:
     def test_extra_packages_accepts_list_and_string(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"extra_packages": ["uv", "jq"]}),
         )
         assert get_user_config().extra_packages == ["uv", "jq"]
@@ -62,10 +62,10 @@ class TestGetUserConfig:
     def test_project_config_wins_over_global(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"agent": "opencode", "session": "dev"}),
         )
-        _write(isolated_paths, PROJECT_CONFIG_NAME, yaml.safe_dump({"session": "stage"}))
+        _write(isolated_paths, CONFIG_NAME, yaml.safe_dump({"session": "stage"}))
         cfg = get_user_config()
         # Project overrides session but leaves unset global options intact.
         assert cfg.session == "stage"
@@ -74,10 +74,10 @@ class TestGetUserConfig:
     def test_overrides_merge_across_layers(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"extra_packages": ["uv"], "image_tag": "a:1"}),
         )
-        _write(isolated_paths, PROJECT_CONFIG_NAME, yaml.safe_dump({"image_tag": "b:2"}))
+        _write(isolated_paths, CONFIG_NAME, yaml.safe_dump({"image_tag": "b:2"}))
         cfg = get_user_config()
         assert cfg.extra_packages == ["uv"]
         assert cfg.image_tag == "b:2"
@@ -85,12 +85,12 @@ class TestGetUserConfig:
     def test_list_entries_replace_not_append(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"passthrough_envs": ["A"]}),
         )
         _write(
             isolated_paths,
-            PROJECT_CONFIG_NAME,
+            CONFIG_NAME,
             yaml.safe_dump({"passthrough_envs": ["B"]}),
         )
         assert get_user_config().passthrough_envs == ["B"]
@@ -98,7 +98,7 @@ class TestGetUserConfig:
     def test_unknown_default_agent_warns(self, isolated_paths, capsys):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"agent": "nope"}),
         )
         get_user_config()
@@ -107,7 +107,7 @@ class TestGetUserConfig:
     def test_invalid_config_raises_value_error(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"session": 123}),
         )
         with pytest.raises(ValueError, match="Invalid user config"):
@@ -124,7 +124,7 @@ class TestGetEffectiveAgentConfig:
     def test_extra_packages_map_to_flake(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"extra_packages": ["uv", "jq"]}),
         )
         config = get_effective_agent_config("opencode")
@@ -135,7 +135,7 @@ class TestGetEffectiveAgentConfig:
     def test_flat_overrides_and_bundled_fields_kept(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {"image_tag": "localhost/custom:latest", "container_name": "my-instance"}
             ),
@@ -148,7 +148,7 @@ class TestGetEffectiveAgentConfig:
     def test_overrides_apply_to_any_agent(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"agent": "opencode", "extra_packages": ["uv"]}),
         )
         # The config targets opencode, but overrides still apply to pi.
@@ -158,7 +158,7 @@ class TestGetEffectiveAgentConfig:
     def test_extra_packages_wins_over_nested_flake(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"extra_packages": ["uv"], "flake": {"dir": "config/agents/pi"}}),
         )
         config = get_effective_agent_config("opencode")
@@ -168,7 +168,7 @@ class TestGetEffectiveAgentConfig:
     def test_unfree_shorthands_map_to_flake(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"allow_unfree": True, "permitted_insecure": ["openssl-1.1.1w"]}),
         )
         config = get_effective_agent_config("opencode")
@@ -178,7 +178,7 @@ class TestGetEffectiveAgentConfig:
     def test_unfree_shorthands_wins_over_nested_flake(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {
                     "allow_unfree": True,
@@ -199,7 +199,7 @@ class TestGetEffectiveAgentConfig:
     def test_lists_replace_bundled_values(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"passthrough_envs": ["SCALAWAY_TOKEN"]}),
         )
         config = get_effective_agent_config("opencode")
@@ -209,7 +209,7 @@ class TestGetEffectiveAgentConfig:
     def test_user_files_append_to_bundled(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {
                     "files": [
@@ -236,7 +236,7 @@ class TestGetEffectiveAgentConfig:
     def test_user_files_append_applies_to_any_agent(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {"files": [{"name": "tools", "permissions": "rw", "description": "tools dir"}]}
             ),
@@ -251,7 +251,7 @@ class TestGetEffectiveAgentConfig:
     def test_bad_type_fails_validation(self, isolated_paths):
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump({"extra_packages": [1]}),
         )
         # Bad types fail Pydantic validation (the same strategy as agent files),
@@ -267,7 +267,7 @@ class TestProfileEffectiveConfig:
         profile winning per key)."""
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {
                     # Self-referential overlay; only `env-prod` is resolved here.
@@ -299,7 +299,7 @@ class TestProfileEffectiveConfig:
         profile overrides that key (files append after the baseline)."""
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {
                     "passthrough_envs": ["BASE_TOKEN"],
@@ -333,7 +333,7 @@ class TestProfileEffectiveConfig:
         from the top-level baseline (agent config still fully resolves)."""
         _write(
             isolated_paths,
-            f".config/container-agents/{GLOBAL_CONFIG_NAME}",
+            f".config/container-agents/{CONFIG_NAME}",
             yaml.safe_dump(
                 {
                     "image_tag": "v1",
