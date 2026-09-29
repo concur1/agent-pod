@@ -1,4 +1,4 @@
-.PHONY: clean check lint typecheck test test-integration format build run
+.PHONY: clean check lint typecheck test test-integration format docs-ref build run
 
 # Run all checks: ruff lint + ty type check
 check: lint typecheck
@@ -23,6 +23,11 @@ test-integration:
 format:
 	uv run ruff check . --fix
 	uv run ruff format .
+
+# Regenerate the config reference doc from the Pydantic config models
+# (run after editing the config models in src/agent_pod/types.py)
+docs-ref:
+	uv run python -m agent_pod.gen_config_docs
 
 # Remove Python bytecode caches. When a package is renamed or removed, its
 # old __pycache__ dirs linger here, ignored by git and invisible to git status.

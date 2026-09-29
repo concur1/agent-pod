@@ -13,7 +13,65 @@ Both files are validated with Pydantic using the same strategy as the bundled
 agent configs, so malformed YAML or bad types fail with a clear error. An
 unknown default `agent` is warned about and ignored.
 
-## Precedence
+<!-- generated:config-keys:start -->
+## Config keys
+
+Every key you can set, generated from the Pydantic config models so the reference can't drift from the validator.
+
+### Top-level config and profiles
+
+The top level of a config file accepts every key below; all but `profile`/`profiles` are also valid inside a `profiles.<name>` entry.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `agent` | `str \| null` | `null` | Default agent for `ap run`/`build`/`sessions` when none is given on the CLI. |
+| `context_files` | `list[str] \| null` | `null` | Default `--context-file` entries (HOST_PATH[:NAME]). |
+| `files` | `list[FileMount] \| null` | `null` | File/dir mounts appended to the agent's `files` (see AgentConfig.files); a later mount at the same container path replaces an earlier one. |
+| `extra_args` | `list[str] \| null` | `null` | Default extra args forwarded to the agent. |
+| `settings_file` | `str \| null` | `null` | Default `--settings-file` path. |
+| `session` | `str \| null` | `null` | Default --session value. |
+| `ephemeral` | `bool \| null` | `null` | Ephemeral git sessions: in a git repo, mount the .git read-write so the container creates its own per-session worktree on it — only committed files reach the host. Default false: the working tree is mounted directly at /sandbox. |
+| `flake` | `FlakeOverrides \| null` | `null` | Override of the agent's `flake` config (see AgentConfig.flake). |
+| `extra_packages` | `list[str] \| null` | `null` | Nix packages to add to the agent's flake image (shorthand for `flake.extra_packages`, so it applies to whichever agent is run). A single string is accepted as a one-item list. |
+| `allow_unfree` | `bool \| null` | `null` | Shorthand for `flake.allow_unfree`: allow unfree nixpkgs packages in the agent image. |
+| `permitted_insecure` | `list[str] \| null` | `null` | Shorthand for `flake.permitted_insecure`: exact nixpkgs package versions allowed despite being marked insecure. |
+| `image_tag` | `str \| null` | `null` | See AgentConfig.image_tag |
+| `container_name` | `str \| null` | `null` | See AgentConfig.container_name |
+| `container_home` | `str \| null` | `null` | See AgentConfig.container_home |
+| `tmpfs_mounts` | `dict[str, str] \| null` | `null` | See AgentConfig.tmpfs_mounts |
+| `passthrough_envs` | `list[str] \| null` | `null` | See AgentConfig.passthrough_envs |
+| `profile` | `str \| null` | `null` | Default profile name for `ap run`/`plan`. |
+| `profiles` | `dict[str, ProfileConfig]` | `{}` | Named profiles: overrides on top of the top-level defaults, plus the `agent/<profile>/<id>` branch namespace for auto-generated sessions. |
+
+### `files` entries
+
+Each entry of the `files` list.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `source` | `str \| null` | `null` | Host file or folder to mount, or a `builtin:` generator id (`builtin:instructions`, `builtin:git-workflow`) for content agent-pod generates at runtime. Omit for a writable state file/dir with no host seed (it is created empty in the session state dir). |
+| `name` | `str` | `—` | Mount name; the container path defaults to `<container_home>/<name>`. Slash-separated names nest (e.g. `skills/git-workflow/SKILL.md`). |
+| `permissions` | `ro \| rw` | `—` | Mount permissions: read-only (`ro`) or read/write (`rw`). |
+| `description` | `str \| null` | `null` | Human-readable description shown by `ap plan`. |
+| `target` | `str \| null` | `null` | Absolute container path override; defaults to `<container_home>/<name>` (e.g. opencode's auth.json lives outside its home). |
+| `optional` | `bool` | `false` | Skip silently if the host `source` is missing (default False prints a warning and skips). Writable state entries are always created. |
+| `context` | `bool` | `false` | Treat the file as a context file: mounted read-only into the shared contexts dir, listed in the generated instructions, and passed to pi as an `@<path>` arg. `--context-file` / the `context_files` config key are sugar for a `context: true` files entry; adding `context: true` here is the generic form. |
+| `seed` | `bool` | `false` | For read/write files: copy the host `source` into the session state dir on first run, then mount the copy writable so the host file is never modified. |
+| `secret` | `bool` | `false` | Flag the mount as `[secret]` in `ap plan`; values never shown. |
+| `type` | `file \| dir \| null` | `null` | Explicit file/dir kind for writable state entries; inferred when omitted (`file` when `seed` is set, otherwise from the source's type or the name's extension). |
+
+### `flake` entries
+
+`flake` overrides the agent's flake config.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `dir` | `str \| null` | `null` | See FlakeConfig.dir |
+| `extra_packages` | `list[str] \| null` | `null` | See FlakeConfig.extra_packages |
+| `allow_unfree` | `bool \| null` | `null` | See FlakeConfig.allow_unfree |
+| `permitted_insecure` | `list[str] \| null` | `null` | See FlakeConfig.permitted_insecure |
+<!-- generated:config-keys:end -->
+
 
 Values are merged lowest-to-highest precedence, so more specific layers win:
 
