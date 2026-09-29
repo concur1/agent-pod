@@ -218,6 +218,15 @@ class AgentConfig(BaseModel):
             "a required description so the agent understands what the value grants."
         ),
     )
+    prompt: str | None = Field(
+        default=None,
+        examples=["You work on the payments service. Run `make check` before every commit."],
+        description=(
+            "Optional custom prompt injected at the top of the generated agent "
+            "instructions (AGENTS.md), so the agent reads its role/task before the "
+            "sandbox grants. Only rendered when set."
+        ),
+    )
 
     @property
     def writable_state(self) -> list[FileMount]:
@@ -367,6 +376,14 @@ class ProfileConfig(BaseModel):
         default=None,
         examples=[[{"name": "MY_API_KEY", "description": "API key for the my.example service"}]],
         description="See AgentConfig.passthrough_envs",
+    )
+    prompt: str | None = Field(
+        default=None,
+        examples=["You are a release engineer; verify builds before merging."],
+        description=(
+            "See AgentConfig.prompt — optional custom prompt injected into the "
+            "generated agent instructions."
+        ),
     )
 
     @field_validator("extra_packages", mode="before")

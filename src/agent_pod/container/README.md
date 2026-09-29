@@ -141,7 +141,9 @@ and podman's default capabilities — see `SecurityProfile` in `runner.py`).
 The same picture is written into the generated agent instructions: the
 sandbox's mounts (secrets flagged), forwarded env vars with their config
 `description`s, and the network posture, so the agent understands its own
-permissions.
+permissions. A `prompt` set in the config is injected at the very top of that
+file, so a profile can give the agent its role/task before it reads its
+grants.
 
 ## Run (`runner.py`)
 

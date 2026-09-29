@@ -82,6 +82,9 @@
 #       - name: AWS_SECRET_ACCESS_KEY
 #         description: AWS secret for the infra account
 #     extra_packages: [pulumi]
+#     prompt: |
+#       You are the infra operator. Only make changes that are explicitly requested;
+#       run `pulumi preview` (never `up`) unless told otherwise.
 
 # Agent-config overrides — flat top-level keys, applied to whichever agent is
 # run. A bare string is accepted as a one-item list. extra_packages names are

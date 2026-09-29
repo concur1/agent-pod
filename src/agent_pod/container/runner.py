@@ -369,13 +369,11 @@ def _instructions_content(
     what it can touch: mounts (with secrets flagged), forwarded env vars with
     their descriptions, and the network posture.
     """
-    lines = [
-        "# Agent instructions",
-        "",
-        "## Version control",
-        "",
-        "Follow the `git-workflow` skill for all code change operations — never use `jj`.",
-    ]
+    lines = ["# Agent instructions", ""]
+    if config.prompt:
+        lines.extend(["## Instructions", "", config.prompt, ""])
+    lines.extend(["## Version control", ""])
+    lines.append("Follow the `git-workflow` skill for all code change operations — never use `jj`.")
     if skill_container_path:
         lines.append(
             f"Load it with `read {skill_container_path}` before any code changes; it covers the"

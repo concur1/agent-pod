@@ -117,6 +117,7 @@ def _user_agent_overrides(user_cfg: ProfileConfig) -> dict:
         "container_home",
         "tmpfs_mounts",
         "passthrough_envs",
+        "prompt",
     ):
         value = getattr(user_cfg, field)
         if value is not None:

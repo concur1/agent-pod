@@ -277,6 +277,29 @@ class TestRenderPlan:
         assert "forwarded (set in this shell)" in out
         assert "· token for HF_TOKEN" in out
 
+    def test_custom_prompt_lands_at_top_of_instructions(self, isolated, passthrough_config):
+        passthrough_config(
+            "pi",
+            prompt=(
+                "You are the release engineer. Verify the build before every merge.\n\n"
+                "Follow these steps."
+            ),
+        )
+        build_plan(agent="pi", env={})
+        content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
+        assert content.startswith("# Agent instructions")
+        prompt_section = content.split("## Version control")[0]
+        assert "## Instructions" in prompt_section
+        assert "You are the release engineer." in prompt_section
+        assert "Verify the build before every merge." in prompt_section
+        assert "Follow these steps." in prompt_section
+
+    def test_no_prompt_renders_no_instructions_section(self, isolated, passthrough_config):
+        passthrough_config("pi", prompt=None)
+        build_plan(agent="pi", env={})
+        content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
+        assert "## Instructions" not in content
+
     def test_secret_values_never_leak(self, isolated, passthrough_config):
         secret_value = "super-secret-value-xyz"
         host_auth = isolated / ".local" / "share" / "opencode" / "auth.json"

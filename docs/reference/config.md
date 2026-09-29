@@ -40,6 +40,7 @@ The top level of a config file accepts every key below; all but `profile`/`profi
 | `container_home` | `str \| null` | `null` | See AgentConfig.container_home |
 | `tmpfs_mounts` | `dict[str, str] \| null` | `null` | See AgentConfig.tmpfs_mounts |
 | `passthrough_envs` | `list[PassthroughEnv] \| null` | `null` | See AgentConfig.passthrough_envs |
+| `prompt` | `str \| null` | `null` | See AgentConfig.prompt — optional custom prompt injected into the generated agent instructions. |
 | `profile` | `str \| null` | `null` | Default profile name for `ap run`/`plan`. |
 | `profiles` | `dict[str, ProfileConfig]` | `{}` | Named profiles: overrides on top of the top-level defaults, plus the `agent/<profile>/<id>` branch namespace for auto-generated sessions. |
 
@@ -198,11 +199,14 @@ at the repo root is the fully-commented, pasteable version.
 
 The config can override any `AgentConfig` field as a flat key (`flake`,
 `image_tag`, `container_name`, `container_home`, `files`, `tmpfs_mounts`,
-`passthrough_envs`). Notably:
+`passthrough_envs`, `prompt`). Notably:
 
 - `passthrough_envs` is the opt-in for env forwarding — no vars are forwarded
   by default, and each entry requires a `name` and a `description` (the
   description feeds `ap plan` and the generated agent instructions).
+- `prompt` is an optional custom prompt (per profile or top-level) injected
+  at the top of the generated agent instructions, so the agent reads its role
+  and task before it sees the sandbox grants.
 - The generated instructions (mounted as the agent's AGENTS.md) tell the
   agent what it can reach: its mounts (secrets flagged), the forwarded env
   vars with their descriptions, and the network posture.
