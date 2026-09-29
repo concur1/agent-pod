@@ -46,15 +46,13 @@ of the agent. `ap shell` takes an optional profile positional, just like
 ap run fixes                                        # (1)!
 ap run fixes --agent pi                             # (2)!
 ap run fixes --session dev                          # (3)!
-ap run fixes --settings-file ./settings.json        # (4)!
-ap run fixes --context-file ./docs/notes.md --context-file ./docs/api.md:api.md  # (5)!
+ap run fixes --context-file ./docs/notes.md --context-file ./docs/api.md:api.md  # (4)!
 ```
 
 1. Run the `fixes` profile.
 2. Force the harness agent regardless of the profile's `agent`.
 3. Persist state under the explicit session `dev`.
-4. Bake pi settings (incl. its `packages` list) into the sandbox image.
-5. Mount extra context files into the agent, `@`-referenced in its
+4. Mount extra context files into the agent, `@`-referenced in its
    instructions. Repeatable.
 
 ## Next

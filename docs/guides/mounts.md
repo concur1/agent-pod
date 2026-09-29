@@ -38,21 +38,6 @@ files:
   `<container_home>/<name>`.
 - `permissions` — `ro` or `rw`.
 
-## Bake pi settings into the image
-
-Sometimes the agent needs pi-specific setup — its `packages` list, model
-defaults — not as a mounted file but *baked into* the sandbox image so they're
-present before the agent runs:
-
-```sh title="Settings file"
-ap run fixes --settings-file ./settings.json
-```
-
-Defaults to `~/.pi/settings.json` if the flag is omitted; set a config default
-with `settings_file: ~/.pi/settings.json`. This is the one thing that's built
-into the image rather than mounted, but it's part of the same picture: what the
-agent gets to use.
-
 ## Next
 
 - [**How to work in git**](git.md) — keep the agent on its own private branch.
