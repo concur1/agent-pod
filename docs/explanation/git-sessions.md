@@ -25,7 +25,7 @@ ever reach the host**: uncommitted edits, untracked files, and your host's
 working tree stay out of the container entirely.
 
 Enable it, and fold a session's branch back in on the host, per the
-[Git work](../guides/git.md) guide.
+[How to work in git](../guides/git.md) guide.
 
 ## The worktree lifecycle
 

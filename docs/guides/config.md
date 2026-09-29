@@ -51,6 +51,7 @@ extra_packages: uv
 
 ## Next
 
-- [**Mounts & context**](mounts.md) — declare files for the agent to see.
-- [**Profiles to taste**](recipes.md) — define `profiles:` entries in the same
-  file.
+- [**How to mount files and context**](mounts.md) — declare files for the
+  agent to see.
+- [**How to use profiles**](recipes.md) — define `profiles:` entries in the
+  same file.
