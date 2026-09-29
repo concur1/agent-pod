@@ -162,7 +162,8 @@ class TestMainArgparse:
         out = capsys.readouterr().out
         assert out.startswith("# Agent instructions")
         assert "## Environment" in out
-        assert "## Version control" in out
+        # No ephemeral mode configured here, so no version-control section.
+        assert "## Version control" not in out
         assert "## Sandbox access" in out
         # Empty context-files section is omitted (no context files here).
         assert "## Context files" not in out

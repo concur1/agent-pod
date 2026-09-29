@@ -9,7 +9,7 @@ from agent_pod.prompts import load_base_prompt
 
 class TestLoadBasePrompt:
     def test_loads_from_bundled_prompt(self, tmp_path, monkeypatch):
-        bundled = tmp_path / "git-workflow.md"
+        bundled = tmp_path / "ephemeral-git-workflow.md"
         bundled.write_text("# bundled prompt")
 
         # Patch the module to use our temp file
@@ -27,9 +27,9 @@ class TestLoadBasePrompt:
         import agent_pod.prompts.loader as loader
 
         monkeypatch.setattr(
-            loader, "_bundled_prompt", lambda: tmp_path / "missing" / "git-workflow.md"
+            loader, "_bundled_prompt", lambda: tmp_path / "missing" / "ephemeral-git-workflow.md"
         )
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "nonexistent_home")
 
-        with pytest.raises(FileNotFoundError, match="Git-workflow skill file not found"):
+        with pytest.raises(FileNotFoundError, match="Ephemeral git-workflow skill file not found"):
             load_base_prompt()

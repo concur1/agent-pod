@@ -32,7 +32,7 @@ files:
 ```
 
 - `source` — host file/folder, or a `builtin:` generator
-  (`builtin:instructions`, `builtin:git-workflow`); omit for a writable state
+  (`builtin:instructions`, `builtin:ephemeral-git-workflow`); omit for a writable state
   file/dir.
 - `name` — mount name; container path defaults to
   `<container_home>/<name>`.

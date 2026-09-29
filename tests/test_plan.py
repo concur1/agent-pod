@@ -67,7 +67,8 @@ class TestBuildPlan:
         kinds = [m.kind for m in plan.mounts]
         assert "repo" in kinds
         assert "instructions" in kinds
-        assert "skill" in kinds
+        # Outside ephemeral git mode the git-workflow skill is not mounted.
+        assert "skill" not in kinds
 
     def test_secret_envs_and_credential_are_secrets(self, isolated, passthrough_config):
         host_auth = isolated / ".local" / "share" / "opencode" / "auth.json"
@@ -127,6 +128,15 @@ class TestBuildPlan:
         by_kind = {m.kind: m for m in plan.mounts}
         assert by_kind["repo"].host_path == repo / ".git"
         assert by_kind["repo"].container_path == "/repo/.git"
+        # Ephemeral git runs mount the ephemeral git-workflow skill and point the
+        # generated instructions at it.
+        skills = [m for m in plan.mounts if m.kind == "skill"]
+        assert len(skills) == 1
+        assert skills[0].container_path.endswith("skills/ephemeral-git-workflow.md")
+        content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
+        assert "## Version control" in content
+        assert "ephemeral-git-workflow" in content
+        assert "rest of this file" in content
         internal = {e.name: e for e in plan.envs if e.internal}
         assert set(internal) == {"AP_BRANCH", "AP_BASE", "AP_REPO_GIT", "AP_WORKTREE"}
         # Values never appear in the plan; the entrypoint gets them via podman -e.
@@ -139,6 +149,10 @@ class TestBuildPlan:
         assert by_kind["repo"].host_path == isolated / "repo"
         assert by_kind["repo"].container_path == "/sandbox"
         assert not any(e.internal for e in plan.envs)
+        # Fallback to the direct mount means no git flow is dictated either.
+        assert not any(m.kind == "skill" for m in plan.mounts)
+        content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
+        assert "## Version control" not in content
 
     def test_passthrough_envs_report_forwarded_status(self, isolated, passthrough_config):
         passthrough_config(
@@ -190,17 +204,34 @@ class TestBuildPlan:
         assert skills_mounts[0].mode == "rw"
         assert skills_mounts[0].kind == "state"
 
-    def test_rw_skills_folds_builtin_skill_into_state_dir(self, isolated):
+    def test_rw_skills_folds_ephemeral_skill_into_state_dir(self, isolated):
         """No file-under-dir bind survives when a profile replaces the skills dir:
-        the builtin git-workflow is folded into the on-disk state dir instead of
-        mounting at .../skills/git-workflow.md (which crun rejects)."""
+        the builtin ephemeral git-workflow is folded into the on-disk state dir instead of
+        mounting at .../skills/ephemeral-git-workflow.md (which crun rejects)."""
+        import subprocess
+
+        repo = isolated / "repo"
+        for cmd in (
+            ["git", "-C", str(repo), "init", "-b", "main"],
+            ["git", "-C", str(repo), "config", "user.name", "t"],
+            ["git", "-C", str(repo), "config", "user.email", "t@t"],
+        ):
+            subprocess.run(cmd, check=True, capture_output=True)
+        (repo / "f").write_text("x\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "init"], check=True, capture_output=True
+        )
+
         rw_skills = FileMount(source="~/.agent/skills", name="skills", permissions="rw", seed=True)
-        plan = build_plan(agent="pi", files=[rw_skills], env={})
-        nested = [m for m in plan.mounts if m.container_path.endswith("skills/git-workflow.md")]
+        plan = build_plan(agent="pi", files=[rw_skills], env={}, ephemeral=True)
+        nested = [
+            m for m in plan.mounts if m.container_path.endswith("skills/ephemeral-git-workflow.md")
+        ]
         assert nested == []
-        folded = isolated / "state" / "pi" / "skills" / "git-workflow.md"
+        folded = isolated / "state" / "pi" / "skills" / "ephemeral-git-workflow.md"
         assert folded.exists()
-        assert "git-workflow" in folded.read_text()
+        assert "ephemeral-git-workflow" in folded.read_text()
 
     def test_file_descriptions_rendered_in_plan(self, isolated, passthrough_config):
         extra = isolated / "extra.md"
@@ -288,11 +319,13 @@ class TestRenderPlan:
         build_plan(agent="pi", env={})
         content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
         assert content.startswith("# Agent instructions")
-        prompt_section = content.split("## Version control")[0]
+        prompt_section = content.split("## Sandbox access")[0]
         assert "## Instructions" in prompt_section
         assert "You are the release engineer." in prompt_section
         assert "Verify the build before every merge." in prompt_section
         assert "Follow these steps." in prompt_section
+        # Outside ephemeral git mode no version-control section is dictated.
+        assert "## Version control" not in content
 
     def test_no_prompt_renders_no_instructions_section(self, isolated, passthrough_config):
         passthrough_config("pi", prompt=None)
@@ -302,22 +335,18 @@ class TestRenderPlan:
 
     def test_instructions_open_with_environment_section(self, isolated):
         """The generated AGENTS.md opens by describing the sandbox and pointing
-        at the detailed environment sections that follow; the version-control
-        line just names the skill (no DVCS choice), and an empty context-files
-        section is omitted entirely."""
+        at the detailed environment sections that follow. Outside ephemeral mode
+        no version-control section is emitted (the git-workflow skill is not
+        mounted), and an empty context-files section is omitted entirely."""
         build_plan(agent="pi", env={})
         content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
         assert content.startswith("# Agent instructions")
-        head = content.split("## Version control")[0]
+        head = content.split("## Sandbox access")[0]
         assert "## Environment" in head
         assert "container sandbox" in head
         assert "rest of this file" in head
-        vc_line = next(
-            line
-            for line in content.splitlines()
-            if line.startswith("Follow the `git-workflow` skill")
-        )
-        assert vc_line == "Follow the `git-workflow` skill for all code change operations."
+        assert "## Version control" not in content
+        assert "ephemeral-git-workflow" not in content
         assert "Context files" not in content
 
     def test_secret_values_never_leak(self, isolated, passthrough_config):

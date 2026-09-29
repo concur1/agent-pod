@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Reserved `source` values for content agent-pod generates at runtime rather than
 # mounting from the host. Used by `files` entries in the agent configs.
 BUILTIN_INSTRUCTIONS = "builtin:instructions"
-BUILTIN_GIT_WORKFLOW = "builtin:git-workflow"
+BUILTIN_EPHEMERAL_GIT_WORKFLOW = "builtin:ephemeral-git-workflow"
 
 # Env vars whose name looks like a credential are treated as secrets.
 SECRET_ENV_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
@@ -363,7 +363,7 @@ def _instructions_content(
     security: SecurityProfile,
     env: Mapping[str, str],
 ) -> str:
-    """The generated AGENTS.md: git-workflow conventions plus the sandbox's grants.
+    """The generated AGENTS.md: the ephemeral git-workflow conventions plus the sandbox's grants.
 
     The agent reads the same launch screen `ap plan` shows, so it understands
     what it can touch: mounts (with secrets flagged), forwarded env vars with
@@ -376,24 +376,22 @@ def _instructions_content(
             "",
             "You are running in an isolated container sandbox for this task, and not on the "
             "host machine. The rest of this file and any further context describe the "
-            "environment in detail: version-control conventions, context files, the files and "
-            "secrets you can access, network, and environment variables.",
+            "environment: the working tree you act in, the files and secrets you can access, "
+            "network, and environment variables.",
             "",
         ]
     )
     if config.prompt:
         lines.extend(["## Instructions", "", config.prompt, ""])
-    lines.extend(["## Version control", ""])
-    lines.append("Follow the `git-workflow` skill for all code change operations.")
     if skill_container_path:
-        lines.append(
-            f"Load it with `read {skill_container_path}` before any code changes; it covers the"
-            " commit flow and working conventions."
-        )
-    else:
-        lines.append(
-            "Load the `git-workflow` skill before any code changes; it covers the"
-            " commit flow and working conventions."
+        lines.extend(
+            [
+                "## Version control",
+                "",
+                "Follow the `ephemeral-git-workflow` skill for all code change operations.",
+                f"Load it with `read {skill_container_path}` before any code changes; it covers"
+                " the commit flow and working conventions.",
+            ]
         )
     if context_entries:
         lines.extend(["## Context files", ""])
@@ -452,7 +450,7 @@ def build_mounts(
     `ap plan` preview, so the plan always reflects what will actually run. The
     sandbox's `files` are mounted in list order, so a directory entry placed
     before a file entry nested inside it wins for the exact path (e.g. the host
-    skills dir before the runner-authoritative git-workflow SKILL.md). Context
+    skills dir before the runner-authoritative ephemeral-git-workflow SKILL.md). Context
     (`context: true`) files are read-only entries also referenced in the
     generated instructions and passed to pi as `@<path>` args.
     """
@@ -506,9 +504,16 @@ def build_mounts(
             # Generated after the full mount list is assembled, so it can describe
             # the whole sandbox (mounts, env vars, network).
             continue
-        if entry.source == BUILTIN_GIT_WORKFLOW:
+        if entry.source == BUILTIN_EPHEMERAL_GIT_WORKFLOW:
+            # Ephemeral-only: the skill exists to tell the agent its work only
+            # reaches the host as commits on its per-session branch. With the
+            # working tree mounted directly that flow does not exist, so dictating
+            # git behaviour would be wrong — skip the mount and the
+            # version-control section of the generated instructions.
+            if ephemeral_repo is None:
+                continue
             prompts_dir.mkdir(parents=True, exist_ok=True)
-            host = prompts_dir / "git-workflow.md"
+            host = prompts_dir / "ephemeral-git-workflow.md"
             host.write_text(load_base_prompt())
             mounts.append(
                 Mount(
@@ -599,7 +604,12 @@ def build_mounts(
         host = prompts_dir / f"{agent_name}-instructions.md"
         host.write_text(
             _instructions_content(
-                _builtin_container_path(config, BUILTIN_GIT_WORKFLOW),
+                # Version-control section only when the ephemeral skill is mounted.
+                (
+                    _builtin_container_path(config, BUILTIN_EPHEMERAL_GIT_WORKFLOW)
+                    if ephemeral_repo is not None
+                    else None
+                ),
                 context_entries,
                 config,
                 mounts,
@@ -629,7 +639,7 @@ def _finalize_mounts(mounts: list[Mount]) -> list[Mount]:
     - A nested mount under a directory we own (writable session state) is
       folded into that directory instead of bind-mounting file-under-dir:
       crun cannot create a mount point *inside* a bind-mounted directory whose
-      source lacks the nested path (e.g. `…/skills/git-workflow.md` after the
+      source lacks the nested path (e.g. `…/skills/ephemeral-git-workflow.md` after the
       skills profile replaces `…/skills` with a rw state dir). Folding the
       nested content into the on-disk state dir keeps the agent seeing it — the
       nested (builtin) version wins for the exact path, as before — without the

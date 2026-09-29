@@ -75,18 +75,27 @@ class TestPiGlobalAgentsMd:
         assert config.file_container_path(instr) == "/root/.pi/agent/AGENTS.md"
 
     def test_run_agent_pi_mounts_agents_md_and_passes_at_args(self, tmp_path, monkeypatch):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        for cmd in (
+            ["git", "-C", str(repo), "init", "-b", "main"],
+            ["git", "-C", str(repo), "config", "user.name", "test"],
+            ["git", "-C", str(repo), "config", "user.email", "t@t"],
+        ):
+            subprocess.run(cmd, check=True, capture_output=True)
+        (repo / "f").write_text("x\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "init"], check=True, capture_output=True
+        )
         monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
         monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
         monkeypatch.setattr(
             "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
         )
-        # podman volume inspect/create calls
-        monkeypatch.setattr(
-            "agent_pod.container.runner.subprocess.run",
-            lambda *a, **k: MagicMock(returncode=1, stderr=""),
-        )
 
         captured = _capture_run(monkeypatch)
+        monkeypatch.chdir(repo)
 
         ctx = tmp_path / "ctx.md"
         ctx.write_text("# ctx")
@@ -95,6 +104,7 @@ class TestPiGlobalAgentsMd:
             run_agent(
                 "pi",
                 ["hello"],
+                ephemeral=True,
                 context_files=[
                     FileMount(source=str(ctx), name="ctx.md", permissions="ro", context=True)
                 ],
@@ -103,8 +113,11 @@ class TestPiGlobalAgentsMd:
         args = captured["args"]
         # Global AGENTS.md is mounted into the container
         assert any(a.endswith("/root/.pi/agent/AGENTS.md:ro,z") for a in args)
-        # git-workflow is mounted as a discoverable skill, not a context prompt
-        assert any("/root/.pi/agent/skills/git-workflow.md:ro,z" in a for a in args)
+        # In ephemeral git runs the git-workflow skill is mounted as a discoverable
+        # skill, not a context prompt
+        assert any(
+            a.endswith("/root/.pi/agent/skills/ephemeral-git-workflow.md:ro,z") for a in args
+        )
         assert not any("/etc/agent-instructions" in a for a in args)
         # Context files are still passed as @ file arguments to pi
         assert "@/root/.config/agent/contexts/ctx.md" in args
@@ -114,10 +127,37 @@ class TestPiGlobalAgentsMd:
         # Generated AGENTS.md points at the skill and @-references the context file
         agents_md = tmp_path / "state" / "prompts" / "pi-instructions.md"
         content = agents_md.read_text()
-        assert "git-workflow" in content
-        assert "/root/.pi/agent/skills/git-workflow.md" in content
+        assert "ephemeral-git-workflow" in content
+        assert "/root/.pi/agent/skills/ephemeral-git-workflow.md" in content
         assert "/etc/agent-instructions" not in content
         assert "@/root/.config/agent/contexts/ctx.md" in content
+
+    def test_run_agent_pi_non_ephemeral_dictates_no_git_flow(self, tmp_path, monkeypatch):
+        """Outside ephemeral git mode the git-workflow skill is not mounted and
+        the generated AGENTS.md has no version-control section."""
+        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
+        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
+        monkeypatch.setattr(
+            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
+        )
+        # Swallow the real-git tidy_noop_branches call against the host repo.
+        monkeypatch.setattr(
+            "agent_pod.container.runner.subprocess.run",
+            lambda *a, **k: MagicMock(returncode=1, stderr=""),
+        )
+
+        captured = _capture_run(monkeypatch)
+
+        with pytest.raises(SystemExit):
+            run_agent("pi", ["hello"])
+
+        args = captured["args"]
+        assert not any(
+            a.endswith("/root/.pi/agent/skills/ephemeral-git-workflow.md:ro,z") for a in args
+        )
+        content = (tmp_path / "state" / "prompts" / "pi-instructions.md").read_text()
+        assert "## Version control" not in content
+        assert "ephemeral-git-workflow" not in content
 
     def test_context_flag_in_files_config_equals_context_files(self, tmp_path, monkeypatch):
         """`context: true` in a config `files` entry behaves like --context-file:
@@ -192,25 +232,36 @@ class TestOpencodeSkillAndInstructions:
         assert config.file_container_path(instr) == "/root/.claude/CLAUDE.md"
 
     def test_run_agent_opencode_mounts_skill_and_agents_md(self, tmp_path, monkeypatch):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        for cmd in (
+            ["git", "-C", str(repo), "init", "-b", "main"],
+            ["git", "-C", str(repo), "config", "user.name", "test"],
+            ["git", "-C", str(repo), "config", "user.email", "t@t"],
+        ):
+            subprocess.run(cmd, check=True, capture_output=True)
+        (repo / "f").write_text("x\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "init"], check=True, capture_output=True
+        )
         monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
         monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
         monkeypatch.setattr(
             "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
         )
-        monkeypatch.setattr(
-            "agent_pod.container.runner.subprocess.run",
-            lambda *a, **k: MagicMock(returncode=1, stderr=""),
-        )
 
         captured = _capture_run(monkeypatch)
+        monkeypatch.chdir(repo)
 
         with pytest.raises(SystemExit):
-            run_agent("opencode", [])
+            run_agent("opencode", [], ephemeral=True)
 
         args = captured["args"]
-        # git-workflow skill is mounted into opencode's skills dir as SKILL.md
+        # In ephemeral git runs the skill is mounted into opencode's skills dir as SKILL.md
         assert any(
-            a.endswith("/root/.config/opencode/skills/git-workflow/SKILL.md:ro,z") for a in args
+            a.endswith("/root/.config/opencode/skills/ephemeral-git-workflow/SKILL.md:ro,z")
+            for a in args
         )
         # Global AGENTS.md is mounted for opencode
         assert any(a.endswith("/root/.config/opencode/AGENTS.md:ro,z") for a in args)
@@ -218,31 +269,35 @@ class TestOpencodeSkillAndInstructions:
         # Generated AGENTS.md points at the opencode skill path
         agents_md = tmp_path / "state" / "prompts" / "opencode-instructions.md"
         content = agents_md.read_text()
-        assert "git-workflow" in content
-        assert "/root/.config/opencode/skills/git-workflow/SKILL.md" in content
+        assert "ephemeral-git-workflow" in content
+        assert "/root/.config/opencode/skills/ephemeral-git-workflow/SKILL.md" in content
 
 
 class TestHostSkillsDirPassthrough:
     """The `skills` file entry mounts the host skills dir read-only, when present."""
 
-    def _run(self, tmp_path, monkeypatch, agent="opencode", config=None):
+    def _run(self, tmp_path, monkeypatch, agent="opencode", config=None, repo=None):
         monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
         monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
         monkeypatch.setattr(
             "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
         )
-        monkeypatch.setattr(
-            "agent_pod.container.runner.subprocess.run",
-            lambda *a, **k: MagicMock(returncode=1, stderr=""),
-        )
+        if repo is None:
+            # Swallow the real-git tidy_noop_branches call against the host repo.
+            monkeypatch.setattr(
+                "agent_pod.container.runner.subprocess.run",
+                lambda *a, **k: MagicMock(returncode=1, stderr=""),
+            )
         if config is not None:
             monkeypatch.setattr(
                 "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: config
             )
+        if repo is not None:
+            monkeypatch.chdir(repo)
 
         captured = _capture_run(monkeypatch)
         with pytest.raises(SystemExit):
-            run_agent(agent, [])
+            run_agent(agent, [], ephemeral=repo is not None)
         return captured["args"]
 
     def test_each_agent_mounts_host_skills_dir_at_its_global_skills_dir(
@@ -267,19 +322,36 @@ class TestHostSkillsDirPassthrough:
         assert not any("/root/.config/opencode/skills:ro,z" in a for a in args)
 
     def test_host_skills_dir_mounted_before_git_workflow_file(self, tmp_path, monkeypatch):
+        """The skill file ordering guard needs an ephemeral git run: that is the
+        only case the builtin skill is mounted at all, and the host skills dir
+        mount must precede it so the runner-authoritative file wins for that
+        exact path."""
         host_skills = tmp_path / "host-skills"
         host_skills.mkdir()
         config = _with_skills_source(get_agent_config("opencode"), host_skills)
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        for cmd in (
+            ["git", "-C", str(repo), "init", "-b", "main"],
+            ["git", "-C", str(repo), "config", "user.name", "test"],
+            ["git", "-C", str(repo), "config", "user.email", "t@t"],
+        ):
+            subprocess.run(cmd, check=True, capture_output=True)
+        (repo / "f").write_text("x\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "init"], check=True, capture_output=True
+        )
 
-        args = self._run(tmp_path, monkeypatch, agent="opencode", config=config)
+        args = self._run(tmp_path, monkeypatch, agent="opencode", config=config, repo=repo)
         # The host skills dir mount precedes the git-workflow file mount so the
-        # runner-authoritative git-workflow file wins for that exact path.
+        # runner-authoritative file wins for that exact path.
         target = _skills_target(config)
         skills_mount = next(i for i, a in enumerate(args) if a == f"{host_skills}:{target}:ro,z")
         git_mount = next(
             i
             for i, a in enumerate(args)
-            if a.endswith("/root/.config/opencode/skills/git-workflow/SKILL.md:ro,z")
+            if a.endswith("/root/.config/opencode/skills/ephemeral-git-workflow/SKILL.md:ro,z")
         )
         assert skills_mount < git_mount
 

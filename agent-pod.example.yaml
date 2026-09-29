@@ -108,7 +108,7 @@
 # Files/dirs to add to the sandbox, in addition to the agent's own `files`.
 # Each entry:
 #   source      — host file/folder, or a `builtin:` generator (`builtin:instructions`,
-#                 `builtin:git-workflow`); omit for a writable state file/dir
+#                 `builtin:ephemeral-git-workflow`); omit for a writable state file/dir
 #                 with no host seed.
 #   name        — mount name; container path defaults to <container_home>/<name>.
 #   permissions — ro | rw

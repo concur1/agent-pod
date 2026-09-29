@@ -82,7 +82,7 @@ settable per profile, with top-level values as the baseline; profile `files`
 entries append after the top-level user `files`, and a later mount at the same
 container path replaces an earlier one — so a profile can flip a bundled
 read-only mount to read/write. Profile `files` *source* may be `builtin:`
-generators like `builtin:instructions` or `builtin:git-workflow`.
+generators like `builtin:instructions` or `builtin:ephemeral-git-workflow`.
 
 Define profiles in the same config file, alongside the top-level keys — see
 the [config guide](config.md) and the [config reference](../reference/config.md).

@@ -50,8 +50,8 @@ Each entry of the `files` list.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `source` | `str \| null` | `null` | Host file or folder to mount, or a `builtin:` generator id (`builtin:instructions`, `builtin:git-workflow`) for content agent-pod generates at runtime. Omit for a writable state file/dir with no host seed (it is created empty in the session state dir). |
-| `name` | `str` | `—` | Mount name; the container path defaults to `<container_home>/<name>`. Slash-separated names nest (e.g. `skills/git-workflow/SKILL.md`). |
+| `source` | `str \| null` | `null` | Host file or folder to mount, or a `builtin:` generator id (`builtin:instructions`, `builtin:ephemeral-git-workflow`) for content agent-pod generates at runtime. Omit for a writable state file/dir with no host seed (it is created empty in the session state dir). |
+| `name` | `str` | `—` | Mount name; the container path defaults to `<container_home>/<name>`. Slash-separated names nest (e.g. `skills/ephemeral-git-workflow/SKILL.md`). |
 | `permissions` | `ro \| rw` | `—` | Mount permissions: read-only (`ro`) or read/write (`rw`). |
 | `description` | `str \| null` | `null` | Human-readable description shown by `ap plan`. |
 | `target` | `str \| null` | `null` | Absolute container path override; defaults to `<container_home>/<name>` (e.g. opencode's auth.json lives outside its home). |
@@ -180,7 +180,7 @@ at the repo root is the fully-commented, pasteable version.
     ```
 
     1. `source` — host file/folder, or a `builtin:` generator
-       (`builtin:instructions`, `builtin:git-workflow`); omit for a writable
+       (`builtin:instructions`, `builtin:ephemeral-git-workflow`); omit for a writable
        state file/dir.
     2. `name` — mount name; container path defaults to
        `<container_home>/<name>`.

@@ -92,8 +92,9 @@ It accepts an optional profile positional, `--agent`, `--session`, and
 `ap context [profile]` prints the exact AGENTS.md a run mounts for the agent
 (the same inputs as `ap plan` — profile positional, `--agent`, `--session`,
 `--context-file`). It is the agent's actual starting context, not a summary
-screen: the profile's custom `prompt` (if set), the git-workflow and context
-file sections, then the sandbox grants — mounts with secrets flagged,
+screen: the profile's custom `prompt` (if set), the version-control section
+(ephemeral mode only), and the context file sections, then the sandbox grants —
+mounts with secrets flagged,
 forwarded env vars with their `description`s (and a `(not set — not
 forwarded)` marker for any that aren't in the current shell), and the network
 posture.

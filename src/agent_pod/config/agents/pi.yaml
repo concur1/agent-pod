@@ -15,11 +15,12 @@ files:
     permissions: ro
     optional: true
     description: "Your global skills dir (host passthrough)"
-  # agent-pod's git-workflow skill, generated at runtime.
-  - source: builtin:git-workflow
-    name: skills/git-workflow.md
+  # agent-pod's ephemeral git-workflow skill, generated at runtime. Mounted only
+  # in ephemeral git runs (build_mounts skips it otherwise).
+  - source: builtin:ephemeral-git-workflow
+    name: skills/ephemeral-git-workflow.md
     permissions: ro
-    description: "git-workflow skill (from agent-pod)"
+    description: "ephemeral git-workflow skill (from agent-pod)"
   # Generated global instruction file (AGENTS.md) auto-loaded by pi.
   - source: builtin:instructions
     name: AGENTS.md

@@ -236,7 +236,7 @@ class TestGetEffectiveAgentConfig:
         # The agent's own entries come first (builtins keep their position) and
         # the user's entries are appended.
         assert any(f.source == "builtin:instructions" for f in config.files)
-        assert any(f.source == "builtin:git-workflow" for f in config.files)
+        assert any(f.source == "builtin:ephemeral-git-workflow" for f in config.files)
         assert config.files[-1].name == "notes.md"
         assert config.files[-1].source == "~/extra/notes.md"
         assert config.files[-1].permissions == "ro"
