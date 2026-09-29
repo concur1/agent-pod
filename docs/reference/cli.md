@@ -16,6 +16,7 @@ The reference for the `ap` command: commands, options, and supported agents.
 | `init` | Interactively generate a user config file from the model's options |
 | `list` | List configured profiles (active marker, agent, flags); `--agents` lists supported agents |
 | `plan [profile]` | Preview the files, secrets, and env vars the agent will be granted |
+| `context [profile]` | Print the generated agent instructions (the AGENTS.md a profile mounts for the agent, with its custom prompt, mounts, forwarded env vars, and network posture) |
 | `sessions <agent>` | List sessions and their container status |
 | `sessions <agent> --rm <session>` | Remove a session: its container and session state dir (git history stays in the repo's `.git`) |
 | `worktree <agent> keep <session>` | Mark a session's worktree to be kept (auto-tidy leaves it alone) |
@@ -85,6 +86,17 @@ launch it:
 
 It accepts an optional profile positional, `--agent`, `--session`, and
 `--context-file` so you can preview the exact run.
+
+## `context` options
+
+`ap context [profile]` prints the exact AGENTS.md a run mounts for the agent
+(the same inputs as `ap plan` — profile positional, `--agent`, `--session`,
+`--context-file`). It is the agent's actual starting context, not a summary
+screen: the profile's custom `prompt` (if set), the git-workflow and context
+file sections, then the sandbox grants — mounts with secrets flagged,
+forwarded env vars with their `description`s (and a `(not set — not
+forwarded)` marker for any that aren't in the current shell), and the network
+posture.
 
 ## Supported agents
 

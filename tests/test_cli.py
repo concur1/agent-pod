@@ -154,6 +154,28 @@ class TestMainArgparse:
         assert "NETWORK & CAPABILITIES" in output
         assert "read/write" in output
 
+    def test_context_subcommand_prints_generated_instructions(self, no_config, capsys):
+        # `ap context` renders the exact AGENTS.md the agent would get: the
+        # live sandbox grants, not the plan's summary screen.
+        with patch.object(sys, "argv", ["ap", "context", "--agent", "pi"]):
+            main()
+        out = capsys.readouterr().out
+        assert out.startswith("# Agent instructions")
+        assert "## Version control" in out
+        assert "## Sandbox access" in out
+        assert "## Context files" in out
+        assert "/sandbox — read/write" in out
+        # No plan-screen framing leaked in.
+        assert "FILESYSTEM ACCESS" not in out
+        assert "NETWORK & CAPABILITIES" not in out
+
+    def test_context_in_help(self, no_config, capsys):
+        with pytest.raises(SystemExit) as exc, patch.object(sys, "argv", ["ap", "--help"]):
+            main()
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "context" in out
+
     @patch("agent_pod.cli.run_agent")
     def test_run_with_session(self, mock_run_agent, no_config):
         with patch.object(sys, "argv", ["ap", "run", "--agent", "pi", "--session", "dev"]):

@@ -388,6 +388,35 @@ def cmd_plan(args: argparse.Namespace) -> None:
     print(render_plan(plan, color=color_enabled()))
 
 
+def cmd_context(args: argparse.Namespace) -> None:
+    """Print the generated agent instructions (AGENTS.md) a profile gives the agent.
+
+    Reuses the plan build so it resolves the profile exactly as `ap plan` does,
+    then prints the instructions file `build_mounts` wrote — the same text the
+    container mounts at /root/.pi/agent/AGENTS.md, with live forwarded/not-set
+    env status from the current shell.
+    """
+    from agent_pod.container.runner import BASE_STATE_DIR
+    from agent_pod.plan import build_plan
+
+    user_cfg = get_user_config()
+    profile, eff = _effective_user_config(user_cfg, args.profile)
+    agent = _resolve_agent(args.agent, eff, "context")
+    context_file_args = (
+        args.context_file if args.context_file is not None else (eff.context_files or [])
+    )
+    context_files = _parse_context_files(context_file_args)
+    build_plan(
+        agent=agent,
+        session=args.session or eff.session or profile,
+        context_files=context_files,
+        user_cfg=eff,
+        profile=profile,
+    )
+    path = BASE_STATE_DIR / "prompts" / f"{agent}-instructions.md"
+    sys.stdout.write(path.read_text())
+
+
 def cmd_sessions(args: argparse.Namespace) -> None:
     user_cfg = get_user_config()
     agent = _resolve_agent(args.agent, user_cfg, "sessions")
@@ -624,6 +653,42 @@ def main() -> None:
         ),
     )
 
+    context_parser = subparsers.add_parser(
+        "context",
+        parents=[_VERBOSE],
+        help="Print the generated agent instructions (AGENTS.md) a profile gives the agent",
+    )
+    context_parser.add_argument(
+        "profile",
+        nargs="?",
+        default=None,
+        help="Named profile to render (branch namespace + run overrides).",
+    )
+    context_parser.add_argument(
+        "--agent",
+        choices=get_all_agent_names(),
+        default=None,
+        help=(
+            "Harness agent to render (defaults to the profile's `agent`, "
+            "else the config's `agent`)."
+        ),
+    )
+    context_parser.add_argument(
+        "--session",
+        default=None,
+        help="Session name to render (defaults to the profile name, or 'default' without one)",
+    )
+    context_parser.add_argument(
+        "--context-file",
+        action="append",
+        dest="context_file",
+        default=None,
+        help=(
+            "Mount a context file into the agent (format: HOST_PATH[:NAME]). "
+            "Can be specified multiple times."
+        ),
+    )
+
     args = parser.parse_args()
     configure_logging(args.verbose)
 
@@ -640,6 +705,8 @@ def main() -> None:
             cmd_init(args)
         elif args.subcommand == "plan":
             cmd_plan(args)
+        elif args.subcommand == "context":
+            cmd_context(args)
         elif args.subcommand == "sessions":
             cmd_sessions(args)
         else:
