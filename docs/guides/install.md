@@ -1,8 +1,8 @@
 ---
-title: Install agent-pod
+title: How to install
 ---
 
-# Install agent-pod
+# How to install
 
 Requires Python 3.11+ and [Podman](https://podman.io/) — used for all
 container and volume operations. Install the tool first; agent-pod itself runs
@@ -30,4 +30,5 @@ works straight after install — no repo checkout needed.
 
 ## Next
 
-[Run your first agent](quickstart.md) — build a sandbox and launch.
+[Run your first agent](../tutorials/quickstart.md) — build a sandbox and
+launch.

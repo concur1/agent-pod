@@ -1,8 +1,8 @@
 ---
-title: Git work
+title: How to work in git
 ---
 
-# Git work
+# How to work in git
 
 For git repos, agent-pod can keep the agent on its own private branch so your
 `main` and working tree are never touched. Enable it in the config:

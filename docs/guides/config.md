@@ -1,8 +1,8 @@
 ---
-title: Config
+title: How to configure
 ---
 
-# Config
+# How to configure
 
 Create a user config file — either let `ap init` generate one, or write it by
 hand. Config files are optional YAML read from your **global** directory and

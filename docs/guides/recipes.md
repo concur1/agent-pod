@@ -1,8 +1,8 @@
 ---
-title: Profiles to taste
+title: How to use profiles
 ---
 
-# Profiles to taste
+# How to use profiles
 
 Each profile is an overlay on top of the top-level config. The same file
 defines them all — here are a few shapes that work out of the box:

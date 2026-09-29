@@ -4,7 +4,8 @@ title: Quickstart
 
 # Quickstart
 
-**Install agent-pod first** — [Install agent-pod](install.md).
+**Installed agent-pod? Follow the
+[how-to install](../guides/install.md) first, then pick up here.**
 
 ## Run your first agent
 

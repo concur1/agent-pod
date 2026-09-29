@@ -1,12 +1,13 @@
 ---
-title: Mounts & context
+title: How to mount files and context
 ---
 
-# Mounts & context
+# How to mount files and context
 
-Anything the agent should see is declared as a `files:` entry (or via the
-`--context-file` shortcut). Context files are mounted read-only and
-`@`-referenced in the generated instructions, so they're always present:
+Give the agent access to files on your host. Anything the agent should see is
+declared as a `files:` entry (or via the `--context-file` shortcut). Context
+files are mounted read-only and `@`-referenced in the generated instructions,
+so they're always present:
 
 ```sh title="Context files (repeatable)"
 ap run fixes --context-file ./docs/notes.md --context-file ./docs/api.md:api.md
@@ -37,7 +38,21 @@ files:
   `<container_home>/<name>`.
 - `permissions` — `ro` or `rw`.
 
+## Bake pi settings into the image
+
+Sometimes the agent needs pi-specific setup — its `packages` list, model
+defaults — not as a mounted file but *baked into* the sandbox image so they're
+present before the agent runs:
+
+```sh title="Settings file"
+ap run fixes --settings-file ./settings.json
+```
+
+Defaults to `~/.pi/settings.json` if the flag is omitted; set a config default
+with `settings_file: ~/.pi/settings.json`. This is the one thing that's built
+into the image rather than mounted, but it's part of the same picture: what the
+agent gets to use.
+
 ## Next
 
-- [**Pi settings**](settings.md) — bake pi settings into the image.
-- [**Git work**](git.md) — keep the agent on its own private branch.
+- [**How to work in git**](git.md) — keep the agent on its own private branch.

@@ -1,8 +1,8 @@
 ---
-title: Skills
+title: How to give an agent skills
 ---
 
-# Skills
+# How to give an agent skills
 
 Any skill you drop into `~/.agent/skills/<name>/SKILL.md` on the host is
 discovered by the sandboxed agent — no rebuild, no stale seeded copy. The

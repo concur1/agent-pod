@@ -1,8 +1,8 @@
 ---
-title: Contribute
+title: How to contribute
 ---
 
-# Contribute
+# How to contribute
 
 Set up the dev environment and run the checks:
 

@@ -4,15 +4,14 @@ site_name = "agent-pod"
 nav = [
   { "Home" = "index.md" },
   { "Tutorials" = [
-    "tutorials/install.md",
     "tutorials/quickstart.md",
     "tutorials/profiles.md",
     "tutorials/sessions.md",
   ] },
   { "How-to guides" = [
+    "guides/install.md",
     "guides/config.md",
     "guides/mounts.md",
-    "guides/settings.md",
     "guides/git.md",
     "guides/skills.md",
     "guides/recipes.md",
