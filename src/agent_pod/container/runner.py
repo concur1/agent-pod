@@ -370,10 +370,21 @@ def _instructions_content(
     their descriptions, and the network posture.
     """
     lines = ["# Agent instructions", ""]
+    lines.extend(
+        [
+            "## Environment",
+            "",
+            "You are running in an isolated container sandbox for this task, and not on the "
+            "host machine. The rest of this file and any further context describe the "
+            "environment in detail: version-control conventions, context files, the files and "
+            "secrets you can access, network, and environment variables.",
+            "",
+        ]
+    )
     if config.prompt:
         lines.extend(["## Instructions", "", config.prompt, ""])
     lines.extend(["## Version control", ""])
-    lines.append("Follow the `git-workflow` skill for all code change operations — never use `jj`.")
+    lines.append("Follow the `git-workflow` skill for all code change operations.")
     if skill_container_path:
         lines.append(
             f"Load it with `read {skill_container_path}` before any code changes; it covers the"
@@ -384,9 +395,10 @@ def _instructions_content(
             "Load the `git-workflow` skill before any code changes; it covers the"
             " commit flow and working conventions."
         )
-    lines.extend(["", "## Context files", ""])
-    for entry in context_entries:
-        lines.append(f"@{CONTEXTS_CONTAINER_DIR}/{entry.name}")
+    if context_entries:
+        lines.extend(["## Context files", ""])
+        for entry in context_entries:
+            lines.append(f"@{CONTEXTS_CONTAINER_DIR}/{entry.name}")
 
     network = "Full outbound (default bridge)" if security.network == "full" else "No outbound"
     host_net = "enabled" if security.host_network else "disabled"

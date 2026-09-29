@@ -161,9 +161,11 @@ class TestMainArgparse:
             main()
         out = capsys.readouterr().out
         assert out.startswith("# Agent instructions")
+        assert "## Environment" in out
         assert "## Version control" in out
         assert "## Sandbox access" in out
-        assert "## Context files" in out
+        # Empty context-files section is omitted (no context files here).
+        assert "## Context files" not in out
         assert "/sandbox — read/write" in out
         # No plan-screen framing leaked in.
         assert "FILESYSTEM ACCESS" not in out

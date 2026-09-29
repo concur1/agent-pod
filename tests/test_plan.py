@@ -300,6 +300,26 @@ class TestRenderPlan:
         content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
         assert "## Instructions" not in content
 
+    def test_instructions_open_with_environment_section(self, isolated):
+        """The generated AGENTS.md opens by describing the sandbox and pointing
+        at the detailed environment sections that follow; the version-control
+        line just names the skill (no DVCS choice), and an empty context-files
+        section is omitted entirely."""
+        build_plan(agent="pi", env={})
+        content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
+        assert content.startswith("# Agent instructions")
+        head = content.split("## Version control")[0]
+        assert "## Environment" in head
+        assert "container sandbox" in head
+        assert "rest of this file" in head
+        vc_line = next(
+            line
+            for line in content.splitlines()
+            if line.startswith("Follow the `git-workflow` skill")
+        )
+        assert vc_line == "Follow the `git-workflow` skill for all code change operations."
+        assert "Context files" not in content
+
     def test_secret_values_never_leak(self, isolated, passthrough_config):
         secret_value = "super-secret-value-xyz"
         host_auth = isolated / ".local" / "share" / "opencode" / "auth.json"
