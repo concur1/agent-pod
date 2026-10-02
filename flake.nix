@@ -35,6 +35,12 @@
     let
       inherit (nixpkgs) lib;
 
+      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+
+      # Evaluate an expression for every supported system, so the flake builds
+      # on Intel/ARM Linux and macOS alike (e.g. an Apple Silicon MacBook).
+      forAllSystems = lib.genAttrs systems;
+
       # Load a uv workspace from a workspace root.
       # Uv2nix treats all uv projects as workspace projects.
       workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
@@ -63,14 +69,13 @@
         # It's using https://pyproject-nix.github.io/pyproject.nix/build.html
       };
 
-      # This example is only using x86_64-linux
-      pkgs = nixpkgs.legacyPackages.x86_64-linux;
-
-      # Use Python 3.12 from nixpkgs
-      python = pkgs.python312;
-
-      # Construct package set
-      pythonSet =
+      # Construct the package set for a given system.
+      makePythonSet = system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          # Use Python 3.12 from nixpkgs
+          python = pkgs.python312;
+        in
         # Use base package set from pyproject.nix builders
         (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
@@ -88,23 +93,29 @@
       # Package a virtual environment as our main application.
       #
       # Enable no optional dependencies for production build.
-      packages.x86_64-linux.default = pythonSet.mkVirtualEnv "agent-pod-env" workspace.deps.default;
+      packages = forAllSystems (system: {
+        default = (makePythonSet system).mkVirtualEnv "agent-pod-env" workspace.deps.default;
+      });
 
       # Make agent-pod runnable with `nix run`
-      apps.x86_64-linux = {
+      apps = forAllSystems (system: {
         default = {
           type = "app";
-          program = "${self.packages.x86_64-linux.default}/bin/agent-pod";
+          program = "${self.packages.${system}.default}/bin/agent-pod";
         };
-      };
+      });
 
       # This example provides two different modes of development:
       # - Impurely using uv to manage virtual environments
       # - Pure development using uv2nix to manage virtual environments
-      devShells.x86_64-linux = {
+      devShells = forAllSystems (system: let
+        pkgs = nixpkgs.legacyPackages.${system};
+        python = pkgs.python312;
+        pythonSet = makePythonSet system;
+      in {
         # `nix develop` lands in the impure uv shell, so uv uses the nixpkgs
         # Python (UV_PYTHON) and never downloads a standalone one NixOS cannot run.
-        default = self.devShells.x86_64-linux.impure;
+        default = self.devShells.${system}.impure;
 
         # It is of course perfectly OK to keep using an impure virtualenv workflow and only use uv2nix to build packages.
         # This devShell simply adds Python and undoes the dependency leakage done by Nixpkgs Python infrastructure.
@@ -213,6 +224,6 @@
               export REPO_ROOT=$(git rev-parse --show-toplevel)
             '';
           };
-      };
+      });
     };
 }
