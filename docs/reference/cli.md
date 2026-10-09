@@ -11,7 +11,7 @@ The reference for the `ap` command: commands, options, and supported agents.
 | Command | Description |
 |---|---|
 | `run [profile]` | Build the image and launch the agent under a profile |
-| `shell [profile]` | Same build, but replace the agent entrypoint with an interactive bash shell |
+| `shell [profile]` | Same build, but replace the agent entrypoint with an interactive bash shell. When session containers are open it lists them and attaches to the picked one instead. |
 | `build <agent>` | Build the container image without running it |
 | `init` | Interactively generate a user config file from the model's options |
 | `list` | List configured profiles (active marker, agent, flags); `--agents` lists supported agents |
