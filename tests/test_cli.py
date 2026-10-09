@@ -8,7 +8,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
-from agent_pod.cli import _parse_context_files, cmd_sessions, main
+from agent_pod.cli import (
+    _open_session_instances,
+    _parse_context_files,
+    _session_label,
+    cmd_sessions,
+    main,
+)
 from agent_pod.types import FileMount
 
 
@@ -50,6 +56,38 @@ class TestParseContextFiles:
             _parse_context_files([f"{f}:{bad}"])
         assert excinfo.value.code == 2
         assert "invalid --context-file name" in capsys.readouterr().err
+
+
+class TestOpenSessions:
+    def test_session_label(self):
+        base = "pi-sandbox-instance"
+        assert _session_label(base, base) == "default"
+        assert _session_label(base, "pi-sandbox-instance-crisp-lamp") == "crisp-lamp"
+
+    def test_open_session_instances_filters_by_base_and_running_only(self, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return type(
+                "R",
+                (),
+                {"stdout": "pi-sandbox-instance\npi-sandbox-instance-alpha\nother-sandbox\n"},
+            )()
+
+        monkeypatch.setattr("agent_pod.cli.subprocess.run", fake_run)
+        assert _open_session_instances("pi-sandbox-instance") == [
+            "pi-sandbox-instance",
+            "pi-sandbox-instance-alpha",
+        ]
+        assert calls == [["podman", "ps", "--format", "{{.Names}}"]]
+
+    def test_open_session_instances_handles_missing_podman(self, monkeypatch):
+        monkeypatch.setattr(
+            "agent_pod.cli.subprocess.run",
+            lambda cmd, **kwargs: (_ for _ in ()).throw(FileNotFoundError("podman")),
+        )
+        assert _open_session_instances("pi-sandbox-instance") == []
 
 
 class TestMainArgparse:
@@ -203,6 +241,38 @@ class TestMainArgparse:
         assert kwargs["use_bash"] is True
         # CLI args are still threaded; the runner ignores them in bash mode.
         assert args[1] == ["--foo"]
+
+    @patch("agent_pod.cli.run_agent")
+    def test_shell_attaches_to_picked_session(self, mock_run_agent, no_config, monkeypatch):
+        """With open sessions `ap shell` execs into the chosen one, never launching."""
+        exec_calls = []
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:2] == ["podman", "ps"]:
+                return type("R", (), {"stdout": "pi-sandbox-instance-alpha\n"})()
+            exec_calls.append(cmd)
+            return type("R", (), {"returncode": 0})()
+
+        monkeypatch.setattr("agent_pod.cli.subprocess.run", fake_run)
+        with (
+            patch.object(sys, "argv", ["ap", "shell", "--agent", "pi"]),
+            patch("builtins.input", return_value="1"),
+            pytest.raises(SystemExit) as exc,
+        ):
+            main()
+        assert exc.value.code == 0
+        mock_run_agent.assert_not_called()
+        assert exec_calls == [["podman", "exec", "-it", "pi-sandbox-instance-alpha", "bash"]]
+
+    @patch("agent_pod.cli.run_agent")
+    def test_shell_no_open_sessions_still_launches(self, mock_run_agent, no_config, monkeypatch):
+        monkeypatch.setattr(
+            "agent_pod.cli.subprocess.run",
+            lambda cmd, **kwargs: type("R", (), {"stdout": ""})(),
+        )
+        with patch.object(sys, "argv", ["ap", "shell", "--agent", "pi"]):
+            main()
+        mock_run_agent.assert_called_once()
 
     @patch("agent_pod.cli.run_agent")
     def test_run_with_context_file(self, mock_run_agent, tmp_path, monkeypatch):

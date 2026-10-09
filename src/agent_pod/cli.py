@@ -168,6 +168,45 @@ def _used_session_ids(agent_dir: Path) -> set[str]:
     return {d.name for d in agent_dir.iterdir() if d.is_dir()}
 
 
+def _open_session_instances(base: str) -> list[str]:
+    """Running container instances for this agent: `base` (default session) and
+    `base-<session>`. Podman absence/failure counts as none, so `ap shell` still
+    falls back to a fresh launch.
+    """
+    try:
+        out = subprocess.run(
+            ["podman", "ps", "--format", "{{.Names}}"], capture_output=True, text=True
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    prefix = f"{base}-"
+    return sorted(n for n in out.splitlines() if n == base or n.startswith(prefix))
+
+
+def _session_label(base: str, instance: str) -> str:
+    return "default" if instance == base else instance[len(base) + 1 :]
+
+
+def _select_session(instances: list[str], base: str) -> str:
+    """Interactive numbered picker over the running session containers."""
+    print("Open sessions:")
+    for i, instance in enumerate(instances, 1):
+        print(f"  {i}. {_session_label(base, instance)}")
+    while True:
+        try:
+            choice = input("Select a session to shell into (Ctrl-C to abort): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            raise SystemExit(130) from None
+        if choice.isdigit() and 1 <= int(choice) <= len(instances):
+            return instances[int(choice) - 1]
+        sys.stderr.write(f"Pick a number between 1 and {len(instances)}.\n")
+
+
+def _exec_shell(instance: str) -> int:
+    """Attach an interactive bash to a running session container."""
+    return subprocess.run(["podman", "exec", "-it", instance, "bash"]).returncode or 0
+
+
 def _run(args: argparse.Namespace, use_bash: bool, label: str) -> None:
     # First-time setup: if no user config exists on any level, walk the user
     # through generating one before launching the sandbox.
@@ -177,6 +216,15 @@ def _run(args: argparse.Namespace, use_bash: bool, label: str) -> None:
     user_cfg = get_user_config()
     profile, eff = _effective_user_config(user_cfg, args.profile)
     agent = _resolve_agent(args.agent, eff, label)
+    # `ap shell`: attach to an already-open session instead of launching a fresh
+    # container into an empty /sandbox worktree (which the bash entrypoint skips).
+    if use_bash:
+        base = get_effective_agent_config(agent, eff).container_name
+        open_sessions = _open_session_instances(base)
+        if open_sessions:
+            instance = _select_session(open_sessions, base)
+            print(f"Attaching to {instance} …")
+            raise SystemExit(_exec_shell(instance))
     # CLI flags win over the config; unset flags fall back to the effective
     # (profile-resolved) config values, then to CLI defaults. Config extra_args
     # don't apply when dropping to a bash shell (the runner ignores them anyway).
@@ -531,7 +579,7 @@ def main() -> None:
     shell_parser = subparsers.add_parser(
         "shell",
         parents=[_VERBOSE, _RUN_OPTIONS],
-        help="Drop into an interactive bash shell inside the sandbox",
+        help="Attach to an open session, or drop into a fresh sandbox shell",
     )
     shell_parser.add_argument(
         "profile",
