@@ -16,6 +16,13 @@ profiles:
         name: skills
         permissions: rw
         description: host skills dir (read/write; writes flow back to host)
+  insights:
+    agent: pi
+    files:
+      - source: ~/.pi/agent/insights-reports
+        name: insights-reports
+        permissions: rw
+        description: insights reports (host passthrough; /insights writes here so the HTML lands on the host)
 ephemeral: true
 extra_packages:
 - uv

@@ -12,6 +12,7 @@ from agent_pod.config import get_agent_config, get_effective_agent_config
 from agent_pod.container.cleanup import cleanup_stale_container, container_running
 from agent_pod.container.runner import (
     _run_podman,
+    build_mounts,
     ensure_host_paths,
     prune_matching_branch,
     run_agent,
@@ -571,6 +572,36 @@ class TestReadonlyConfigMounts:
         assert any(a == f"{models}:/root/.pi/agent/models.json:ro,z" for a in args)
         # models-store.json missing on host -> not mounted
         assert not any("/root/.pi/agent/models-store.json" in a for a in args)
+
+
+class TestWritableHostOutputDir:
+    def test_creates_missing_host_dir_instead_of_skipping(self, tmp_path):
+        host_dir = tmp_path / "insights-reports"
+        config = _config_with(
+            "pi",
+            files=[
+                FileMount(
+                    source=str(host_dir),
+                    name="insights-reports",
+                    permissions="rw",
+                    description="insights reports (host passthrough)",
+                )
+            ],
+        )
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+        mounts = build_mounts(
+            agent_name="pi",
+            config=config,
+            cwd=tmp_path,
+            agent_host_dir=state_dir,
+            prompts_dir=tmp_path / "prompts",
+        )
+        # Missing host dir is created, then mounted rw at the pi home path.
+        assert host_dir.is_dir()
+        reports = next(m for m in mounts if m.container_path == "/root/.pi/agent/insights-reports")
+        assert reports.mode == "rw"
+        assert reports.kind == "config"
 
 
 class TestRunAgentSessionValidation:

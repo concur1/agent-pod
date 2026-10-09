@@ -556,8 +556,13 @@ def build_mounts(
             # A writable host path mounted directly (writes flow back to the host).
             rw_host = Path(entry.source).expanduser()
             if not rw_host.exists():
-                _warn_missing(entry, rw_host)
-                continue
+                if entry.effective_type == "dir":
+                    # Writable output dir (e.g. insights reports): create it so the
+                    # mount isn't silently skipped on a fresh host.
+                    rw_host.mkdir(parents=True, exist_ok=True)
+                else:
+                    _warn_missing(entry, rw_host)
+                    continue
             mounts.append(
                 Mount(
                     host_path=rw_host,
