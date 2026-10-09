@@ -349,6 +349,16 @@ class TestRenderPlan:
         assert "ephemeral-git-workflow" not in content
         assert "Context files" not in content
 
+    def test_instructions_list_installed_tools(self, isolated, passthrough_config):
+        flake = _config_with("pi").flake.model_copy(update={"extra_packages": ["jq", "uv"]})
+        passthrough_config("pi", flake=flake)
+        build_plan(agent="pi", env={})
+        content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
+        tools = content.split("### Installed tools")[1].split("### Files & secrets")[0]
+        assert "agent CLI, `bash`, `git`" in tools
+        assert "`jq`, `uv`" in tools and "from `extra_packages`" in tools
+        assert "command -v" in tools
+
     def test_secret_values_never_leak(self, isolated, passthrough_config):
         secret_value = "super-secret-value-xyz"
         host_auth = isolated / ".local" / "share" / "opencode" / "auth.json"

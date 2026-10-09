@@ -402,6 +402,13 @@ def _instructions_content(
     host_net = "enabled" if security.host_network else "disabled"
     lines.extend(["", "## Sandbox access", "", f"{network} network, host network {host_net}.", ""])
 
+    lines.extend(["### Installed tools", ""])
+    lines.append("- the agent CLI, `bash`, `git` — always in the image")
+    if config.flake.extra_packages:
+        tools = ", ".join(f"`{p}`" for p in config.flake.extra_packages)
+        lines.append(f"- {tools} — from `extra_packages`")
+    lines.append("- nothing else is guaranteed — check `command -v <tool>` before relying on it")
+
     lines.extend(["### Files & secrets", ""])
     listed = [
         m for m in mounts if not m.tmpfs and m.kind not in ("gitconfig", "instructions", "skill")
