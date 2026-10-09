@@ -22,3 +22,6 @@ extra_packages:
 - ty
 - ruff
 - gnumake
+- ripgrep
+- jq
+- findutils

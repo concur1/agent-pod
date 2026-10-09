@@ -29,8 +29,10 @@
 
 - [ ] review/merge-conflict feature = a bundled profile, not new code — a `review` profile that uses profile→agent to pick the harness and mounts a review/merge-instructions context file (reuses builtin:ephemeral-git-workflow skill). Deliver: (a) review prompt file, (b) example `review:` profile in the docs/init, (c) test `ap run review` against a repo with conflicts
 - [ ] analytics agent = a bundled profile, not new code — a profile that mounts session state read-only (`~/.config/container-agents/<agent>/<session>/` state dirs + `agent/<profile>/<session>` branches) and a prompt file to cluster recurring errors from transcripts. Deliver: (a) analyst prompt file, (b) example `analytics:` profile in docs/init, (c) session-log capture — today only pi's `sessions` state dir persists; `ap` never logs the agent's terminal output, so verify/capture transcripts across all agents before the analyst has anything to read
+- [ ] transcript scanner = the small parser that feeds the analytics item above: parse pi session JSONL (`~/.pi/agent/sessions/<session>/*.jsonl` — `message`/`toolCall`/`toolResult`/`fetch`/`search` events) and cluster recurring tool failures / errors into ranked optimisation candidates (e.g. repeated `find: command not found` → add findutils to the image). A tiny stdlib script + prompt, no framework
 - [ ] pi extensions in a named volume to improve startup time? — open question; runtime extensions now bake into the image (ADR 003), so a volume likely only helps the nix/buildah cache instead
 - [ ] a token limit to reach before automatic shutoff, might require work as it will be different for each harness.
+- [ ] inject the sandbox toolset into the generated AGENTS.md — `## Environment` in `runner._instructions_content` lists mounts/network/env vars but not which binaries exist; list installed tools (from `extra_packages`, or a `command -v` scan at entrypoint) so the agent doesn't guess whether e.g. `jq`/`rg`/`find` are present
 
 ## Docs & maintenance
 
