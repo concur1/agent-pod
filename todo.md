@@ -32,7 +32,7 @@
 - [ ] transcript scanner = the small parser that feeds the analytics item above: parse pi session JSONL (`~/.pi/agent/sessions/<session>/*.jsonl` — `message`/`toolCall`/`toolResult`/`fetch`/`search` events) and cluster recurring tool failures / errors into ranked optimisation candidates (e.g. repeated `find: command not found` → add findutils to the image). A tiny stdlib script + prompt, no framework
 - [ ] pi extensions in a named volume to improve startup time? — open question; runtime extensions now bake into the image (ADR 003), so a volume likely only helps the nix/buildah cache instead
 - [ ] a token limit to reach before automatic shutoff, might require work as it will be different for each harness.
-- [ ] inject the sandbox toolset into the generated AGENTS.md — `## Environment` in `runner._instructions_content` lists mounts/network/env vars but not which binaries exist; list installed tools (from `extra_packages`, or a `command -v` scan at entrypoint) so the agent doesn't guess whether e.g. `jq`/`rg`/`find` are present
+- [x] ~~inject the sandbox toolset into the generated AGENTS.md~~ — done: `_instructions_content` now adds an `### Installed tools` block under `## Sandbox access` listing the always-present base (`agent CLI`, `bash`, `git`) plus `flake.extra_packages`, with a `command -v` caveat so the agent stops guessing what's installed. Chose `extra_packages` over an entrypoint `command -v` scan because instructions are written host-side pre-launch and mounted read-only.
 
 ## Docs & maintenance
 
