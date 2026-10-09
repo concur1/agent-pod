@@ -470,11 +470,13 @@ class TestOpencodeAuthJson:
         config = self._credential_config(host_auth)
 
         args = self._run_opencode(tmp_path, monkeypatch, config)
-        # auth.json is persisted into the state dir and mounted at opencode's path
-        auth_state = tmp_path / "state" / "opencode" / "auth.json"
+        # auth.json is seeded into the state dir, then folded inside the XDG data
+        # dir state mount that covers opencode's whole /root/.local/share/opencode.
+        auth_state = tmp_path / "state" / "opencode" / "data" / "auth.json"
         assert auth_state.exists()
         assert auth_state.read_text() == '{"example": {"type": "api", "key": "k"}}\n'
-        assert any(a.endswith("/root/.local/share/opencode/auth.json:rw,z") for a in args)
+        assert any(a.endswith("/root/.local/share/opencode:rw,z") for a in args)
+        assert not any("/root/.local/share/opencode/auth.json" in a for a in args)
 
     def test_empty_host_auth_seeds_empty_state_file(self, tmp_path, monkeypatch):
         # A placeholder host auth is copied through; the state file is still
@@ -484,10 +486,11 @@ class TestOpencodeAuthJson:
         config = self._credential_config(host_auth)
 
         args = self._run_opencode(tmp_path, monkeypatch, config)
-        auth_state = tmp_path / "state" / "opencode" / "auth.json"
+        auth_state = tmp_path / "state" / "opencode" / "data" / "auth.json"
         assert auth_state.exists()
         assert auth_state.read_text() == "{}\n"
-        assert any(a.endswith("/root/.local/share/opencode/auth.json:rw,z") for a in args)
+        assert any(a.endswith("/root/.local/share/opencode:rw,z") for a in args)
+        assert not any("/root/.local/share/opencode/auth.json" in a for a in args)
 
 
 class TestReadonlyConfigMounts:

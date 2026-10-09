@@ -28,6 +28,10 @@ files:
   - name: history
     permissions: rw
     description: "claude history (state)"
+  # Claude Code session transcripts: ~/.claude/projects/<encoded-cwd>/<session>.jsonl.
+  - name: projects
+    permissions: rw
+    description: "claude session transcripts (state)"
 tmpfs_mounts:
   /root/.cache: rw,exec,size=512m
   /tmp: rw,exec,size=512m

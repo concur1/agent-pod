@@ -50,6 +50,13 @@ files:
   - name: storage
     permissions: rw
     description: "opencode storage (state)"
+  # OpenCode session transcripts + SQLite store live in the XDG data dir
+  # (~/.local/share/opencode), not under container_home; auth.json above nests
+  # inside it and is folded into this state dir at mount time.
+  - name: data
+    target: /root/.local/share/opencode
+    permissions: rw
+    description: "opencode transcripts and data dir (state)"
 tmpfs_mounts:
   /root/.cache: rw,exec,size=512m
   /tmp: rw,exec,size=512m
