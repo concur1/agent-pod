@@ -21,6 +21,14 @@ files:
     name: CLAUDE.md
     permissions: ro
     description: "Generated global agent instructions"
+  # Writable credentials seeded from the host on first run; the host file is
+  # never modified (the copy lives in the session state dir).
+  - source: ~/.claude/.credentials.json
+    name: .credentials.json
+    permissions: rw
+    seed: true
+    secret: true
+    description: "claude credentials (seeded)"
   # Writable state for claude's own runtime.
   - name: config.json
     permissions: rw
