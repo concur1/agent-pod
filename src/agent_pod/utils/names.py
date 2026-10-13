@@ -77,10 +77,11 @@ def humanized_id(used: set[str] | None = None) -> str:
 def valid_session_name(name: str) -> bool:
     """Whether `name` is safe as a session name.
 
-    Rejects path separators, dot segments, and whitespace, which could escape the
-    agent state dir (or the podman container name) via `..` or an absolute path.
+    Rejects path separators, leading dots, and whitespace, which could escape the
+    agent state dir (or the podman container name) via `..` or an absolute path,
+    or land on a dot-prefixed dir the agent reserves (its shared state dir).
     """
-    if not name or name in {".", ".."}:
+    if not name or name.startswith("."):
         return False
     return "/" not in name and "\\" not in name and not any(c.isspace() for c in name)
 

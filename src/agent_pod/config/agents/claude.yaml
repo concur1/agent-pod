@@ -8,6 +8,18 @@ container_home: /root/.claude
 # Every file/dir supplied to the sandbox lives in `files`; mount order follows
 # list order.
 files:
+  # Claude's whole config dir (CLAUDE_CONFIG_DIR, set in the image, so it also
+  # holds .claude.json): login, onboarding, trust and settings persist across
+  # sessions in the agent's shared state dir, and claude's atomic writes work
+  # because these files live in a mounted dir rather than being bound one by
+  # one. Listed first so the mounts below nest on top of it.
+  - name: config
+    target: /root/.claude
+    type: dir
+    permissions: rw
+    shared: true
+    secret: true
+    description: "claude config, settings and login (shared across sessions)"
   # Your global skills dir (~/.agent/skills/<name>/SKILL.md) mounted read-only.
   - source: ~/.agent/skills
     name: skills
@@ -21,28 +33,16 @@ files:
     name: CLAUDE.md
     permissions: ro
     description: "Generated global agent instructions"
-  # Host settings mirrored read-only (default model, permissions, ...): the
-  # sandbox reads your claude config; edits are made on the host.
+  # Host settings seeded into the shared config dir on first run (default
+  # model, permissions, ...); afterwards the sandbox's copy is its own, so
+  # `/model` etc. persist. Delete it from `.shared/config/` to re-seed.
   - source: ~/.claude/settings.json
-    name: settings.json
-    permissions: ro
-    description: "Your claude settings (host mirror)"
-  # Claude Code's app-state file (~/.claude.json): OAuth login, MCP servers,
-  # per-project trust, and global config keys. Bound read/write so a sandbox
-  # login or setting change persists straight back to the host file.
-  - source: ~/.claude.json
-    name: .claude.json
-    target: /root/.claude.json
+    name: config/settings.json
+    target: /root/.claude/settings.json
     permissions: rw
-    secret: true
-    description: "claude app state and login (host passthrough)"
-  # Linux credential store (~/.claude/.credentials.json): OAuth tokens, written
-  # and refreshed in place by claude.
-  - source: ~/.claude/.credentials.json
-    name: .credentials.json
-    permissions: rw
-    secret: true
-    description: "claude credentials (host passthrough)"
+    seed: true
+    shared: true
+    description: "claude settings (seeded from host)"
   # Writable state for claude's own runtime.
   - name: history
     permissions: rw

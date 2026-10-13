@@ -115,9 +115,19 @@ Kinds of entry:
   empty (`{}` for JSON) or as a directory (inferred, or explicit via `type`).
   This replaces the old `persist_files`, `persist_dirs`, `seed_files`, and
   `credential_file`.
+- **Shared state** — a writable-state entry with `shared: true` lives in
+  `~/.config/container-agents/<agent>/.shared/` instead of the session dir, so
+  it persists across sessions. Claude mounts its whole config dir this way
+  (`CLAUDE_CONFIG_DIR=/root/.claude`, so `.claude.json` lives there too): login,
+  onboarding and settings survive teardown, and because the files sit in a
+  mounted directory rather than being bound one by one, claude's
+  write-temp-then-rename saves don't fail with `EBUSY`. Other mounts nested in a
+  shared dir stay real mounts on top of it (their mount points are pre-created
+  there), and an entry whose state already sits at its spot inside the shared
+  dir (claude's seeded `config/settings.json`) isn't mounted separately.
 
-Writable-state entries are created by `ensure_host_paths` and cleaned up by
-`ap sessions <agent> --rm <session>` (via `AgentConfig.writable_state`). The
+Writable-state entries are created by `ensure_host_paths`; non-shared ones are
+cleaned up by `ap sessions <agent> --rm <session>` (via `AgentConfig.session_state`). The
 read-only host mirrors are identical across sessions since they always mirror
 the host.
 

@@ -453,6 +453,17 @@ class TestCmdSessions:
         assert "default" in out
         assert "dev" in out
 
+    def test_shared_state_is_not_a_session(self, tmp_path, monkeypatch, capsys):
+        state_dir = self._home(tmp_path, monkeypatch)
+        (state_dir / ".shared").mkdir()
+        (state_dir / "dev").mkdir()
+        self._fake_subprocess(monkeypatch, [])
+
+        cmd_sessions(Namespace(agent="pi", rm=None))
+        assert ".shared" not in capsys.readouterr().out
+        cmd_sessions(Namespace(agent="pi", rm="dev"))
+        assert (state_dir / ".shared").is_dir()
+
     def test_list_reports_status_from_podman_ps(self, tmp_path, monkeypatch, capsys):
         state_dir = self._home(tmp_path, monkeypatch)
         (state_dir / "trust.json").write_text("{}\n")

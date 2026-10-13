@@ -15,7 +15,7 @@ from agent_pod.config import get_effective_agent_config
 from agent_pod.container.builder import build_image
 from agent_pod.container.cleanup import cleanup_stale_container, container_running
 from agent_pod.prompts import load_base_prompt
-from agent_pod.types import STATE_DIR, AgentConfig, FileMount, ProfileConfig
+from agent_pod.types import SHARED_STATE_DIR, STATE_DIR, AgentConfig, FileMount, ProfileConfig
 from agent_pod.utils.names import get_instance_name, valid_session_name
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,7 @@ class Mount:
     secret: bool = False
     tmpfs: bool = False
     description: str | None = None
+    shared: bool = False
 
 
 @dataclass(frozen=True)
@@ -120,6 +121,15 @@ def _ensure_state_file(file_path: Path, seed_src: Path | None) -> None:
         file_path.write_text("{}\n")
     else:
         file_path.touch()
+
+
+def shared_state_dir(agent_name: str) -> Path:
+    """Host dir holding an agent's `shared: true` state, common to all sessions."""
+    return BASE_STATE_DIR / agent_name / SHARED_STATE_DIR
+
+
+def _state_root(agent_name: str, agent_host_dir: Path, entry: FileMount) -> Path:
+    return shared_state_dir(agent_name) if entry.shared else agent_host_dir
 
 
 def _warn_missing(entry: FileMount, host: Path) -> None:
@@ -347,10 +357,12 @@ def ensure_host_paths(
         gitconfig.write_text(_gitconfig_seed())
 
     for entry in config.writable_state:
+        path = _state_root(agent_name, agent_host_dir, entry) / entry.name
         if entry.effective_type == "dir":
-            (agent_host_dir / entry.name).mkdir(parents=True, exist_ok=True)
-        else:
-            _ensure_state_file(agent_host_dir / entry.name, _seed_source(entry, settings_file))
+            path.mkdir(parents=True, exist_ok=True)
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_state_file(path, _seed_source(entry, settings_file))
 
     return agent_host_dir
 
@@ -576,7 +588,7 @@ def build_mounts(
             continue
 
         # Writable state: seeded from the host (or empty), mounted from the state dir.
-        state_path = agent_host_dir / entry.name
+        state_path = _state_root(agent_name, agent_host_dir, entry) / entry.name
         seed_host = Path(entry.source).expanduser() if entry.seed and entry.source else None
         mounts.append(
             Mount(
@@ -587,6 +599,7 @@ def build_mounts(
                 source=seed_host,
                 secret=entry.secret,
                 description=entry.description,
+                shared=entry.shared,
             )
         )
 
@@ -656,14 +669,28 @@ def _finalize_mounts(mounts: list[Mount]) -> list[Mount]:
       nested content into the on-disk state dir keeps the agent seeing it — the
       nested (builtin) version wins for the exact path, as before — without the
       conflicting bind.
+    - Shared state dirs outlive sessions, so per-session mounts nested in one
+      must stay real mounts rather than be folded in: their mount points are
+      created in the shared dir up front instead. A nested mount whose host path
+      already is that spot in the shared dir is dropped — binding a file over
+      itself would only make the agent's atomic renames fail with EBUSY.
     """
     unique: dict[str, Mount] = {}
     for mount in mounts:
         unique[mount.container_path] = mount
     ordered = list(unique.values())
     owned_dirs = [m for m in ordered if m.host_path and m.kind in ("state", "credential")]
+    shared_dirs = [m for m in owned_dirs if m.shared]
     result = []
     for mount in ordered:
+        shared_parent = _nested_under_owned_dir(mount, shared_dirs)
+        if shared_parent is not None:
+            spot = _nested_host_path(mount, shared_parent)
+            if mount.host_path == spot:
+                continue
+            _create_mount_point(mount, spot)
+            result.append(mount)
+            continue
         parent = _nested_under_owned_dir(mount, owned_dirs)
         if parent is not None and mount.host_path and Path(mount.host_path).exists():
             _fold_mount_into_dir(mount, parent)
@@ -685,11 +712,30 @@ def _nested_under_owned_dir(mount: Mount, owned_dirs: list[Mount]) -> Mount | No
     return None
 
 
-def _fold_mount_into_dir(mount: Mount, parent: Mount) -> None:
+def _nested_host_path(mount: Mount, parent: Mount) -> Path:
+    """Where `mount`'s container path lands inside `parent`'s host dir."""
     assert parent.host_path is not None
-    assert mount.host_path is not None
     rel = mount.container_path[len(parent.container_path.rstrip("/")) :].lstrip("/")
-    dest = Path(parent.host_path) / rel
+    return Path(parent.host_path) / rel
+
+
+def _create_mount_point(mount: Mount, spot: Path) -> None:
+    """Pre-create `mount`'s mount point so crun needn't create it in a bind mount."""
+    if mount.tmpfs or mount.host_path is None:
+        return
+    try:
+        if Path(mount.host_path).is_dir():
+            spot.mkdir(parents=True, exist_ok=True)
+            return
+        spot.parent.mkdir(parents=True, exist_ok=True)
+        spot.touch(exist_ok=True)
+    except OSError:
+        pass  # plan preview must not crash; a runtime error would surface anyway
+
+
+def _fold_mount_into_dir(mount: Mount, parent: Mount) -> None:
+    assert mount.host_path is not None
+    dest = _nested_host_path(mount, parent)
     src = Path(mount.host_path)
     try:
         if src.is_dir():

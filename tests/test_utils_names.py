@@ -15,7 +15,7 @@ def _cfg(container_name: str) -> AgentConfig:
 
 class TestValidSessionName:
     def test_rejects_unsafe_names(self):
-        for bad in ["../pi2", "/tmp/evil", "a/b", "a\\b", "..", ".", "a b", "a\tb", ""]:
+        for bad in ["../pi2", "/tmp/evil", "a/b", "a\\b", "..", ".", "a b", "a\tb", "", ".shared"]:
             assert not valid_session_name(bad)
 
     def test_accepts_plain_names(self):

@@ -604,6 +604,62 @@ class TestWritableHostOutputDir:
         assert reports.kind == "config"
 
 
+class TestClaudeSharedConfig:
+    def _mounts(self, tmp_path, monkeypatch, session):
+        state = tmp_path / "state"
+        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", state)
+        host_settings = tmp_path / "host-settings.json"
+        host_settings.write_text('{"model": "opus"}\n')
+        files = [
+            f.model_copy(update={"source": str(host_settings)})
+            if f.name == "config/settings.json"
+            else f
+            for f in _config_with("claude").files
+            if f.name != "skills"
+        ]
+        config = _config_with("claude", files=files)
+        agent_host_dir = ensure_host_paths("claude", config, session=session)
+        mounts = build_mounts(
+            agent_name="claude",
+            config=config,
+            cwd=tmp_path,
+            agent_host_dir=agent_host_dir,
+            prompts_dir=tmp_path / "prompts",
+        )
+        return state / "claude" / ".shared" / "config", agent_host_dir, mounts
+
+    def test_config_dir_shared_across_sessions(self, tmp_path, monkeypatch):
+        shared, _, first = self._mounts(tmp_path, monkeypatch, "amber-fox")
+        _, _, second = self._mounts(tmp_path, monkeypatch, "brisk-otter")
+        for mounts in (first, second):
+            config = next(m for m in mounts if m.container_path == "/root/.claude")
+            assert config.host_path == shared
+            assert config.mode == "rw"
+            assert config.secret
+
+    def test_settings_seeded_into_dir_not_bind_mounted(self, tmp_path, monkeypatch):
+        shared, _, mounts = self._mounts(tmp_path, monkeypatch, "amber-fox")
+        assert (shared / "settings.json").read_text() == '{"model": "opus"}\n'
+        assert not any(m.container_path == "/root/.claude/settings.json" for m in mounts)
+
+    def test_sandbox_settings_change_survives_next_session(self, tmp_path, monkeypatch):
+        shared, _, _ = self._mounts(tmp_path, monkeypatch, "amber-fox")
+        (shared / "settings.json").write_text('{"model": "sonnet"}\n')
+        self._mounts(tmp_path, monkeypatch, "brisk-otter")
+        assert (shared / "settings.json").read_text() == '{"model": "sonnet"}\n'
+
+    def test_session_state_stays_mounted_on_top(self, tmp_path, monkeypatch):
+        shared, session_dir, mounts = self._mounts(tmp_path, monkeypatch, "amber-fox")
+        projects = next(m for m in mounts if m.container_path == "/root/.claude/projects")
+        assert projects.host_path == session_dir / "projects"
+        assert (shared / "projects").is_dir()
+        claude_md = next(m for m in mounts if m.container_path == "/root/.claude/CLAUDE.md")
+        assert claude_md.mode == "ro"
+        assert (shared / "CLAUDE.md").is_file()
+        paths = [m.container_path for m in mounts]
+        assert paths.index("/root/.claude") < paths.index("/root/.claude/projects")
+
+
 class TestRunAgentSessionValidation:
     def _patch_prereqs(self, tmp_path, monkeypatch):
         monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")

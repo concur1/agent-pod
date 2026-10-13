@@ -360,13 +360,13 @@ def _profile_summary(profile: ProfileConfig) -> str:
 
 def _default_session_detected(agent_dir: Path, config: AgentConfig) -> bool:
     return (
-        any((agent_dir / entry.name).exists() for entry in config.writable_state)
+        any((agent_dir / entry.name).exists() for entry in config.session_state)
         or (agent_dir / ".gitconfig").exists()
     )
 
 
 def _named_sessions(agent_dir: Path) -> list[str]:
-    return [d.name for d in agent_dir.iterdir() if d.is_dir()]
+    return [d.name for d in agent_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
 
 
 def _detect_sessions(agent_dir: Path, config: AgentConfig) -> list[str]:
@@ -399,7 +399,7 @@ def _remove_session(agent: str, session: str, config: AgentConfig) -> None:
     state_dir = _state_dir() / agent
     if session == "default":
         if state_dir.exists():
-            for entry in config.writable_state:
+            for entry in config.session_state:
                 path = state_dir / entry.name
                 if path.exists():
                     if entry.effective_type == "dir":

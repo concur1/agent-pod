@@ -58,6 +58,7 @@ Each entry of the `files` list.
 | `optional` | `bool` | `false` | Skip silently if the host `source` is missing (default False prints a warning and skips). Writable state entries are always created. |
 | `context` | `bool` | `false` | Treat the file as a context file: mounted read-only into the shared contexts dir, listed in the generated instructions, and passed to pi as an `@<path>` arg. `--context-file` / the `context_files` config key are sugar for a `context: true` files entry; adding `context: true` here is the generic form. |
 | `seed` | `bool` | `false` | For read/write files: copy the host `source` into the session state dir on first run, then mount the copy writable so the host file is never modified. |
+| `shared` | `bool` | `false` | For writable state: keep it in the agent's shared state dir (`<agent>/.shared/`) instead of the session's, so it persists across sessions (e.g. logins). `ap sessions --rm` leaves it in place. Mounts nested inside a shared dir are mounted on top of it; an entry whose state already sits at its container path inside one (e.g. a seeded `config/settings.json` under a shared `config` dir) is not mounted separately, so the agent can replace the file atomically. |
 | `secret` | `bool` | `false` | Flag the mount as `[secret]` in `ap plan`; values never shown. |
 | `type` | `file \| dir \| null` | `null` | Explicit file/dir kind for writable state entries; inferred when omitted (`file` when `seed` is set, otherwise from the source's type or the name's extension). |
 

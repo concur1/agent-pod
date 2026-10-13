@@ -27,6 +27,10 @@ def deep_merge(base: dict, override: dict) -> dict:
 # (tests patch Path.home); the runner additionally exports it as BASE_STATE_DIR.
 STATE_DIR = Path(".config") / "container-agents"
 
+# Per-agent subdir (`<STATE_DIR>/<agent>/.shared`) holding `shared: true` state
+# that outlives any one session. Dot-prefixed so it never reads as a session.
+SHARED_STATE_DIR = ".shared"
+
 # Profile selected when `ap run`/`ap plan` get no profile and the config sets none.
 DEFAULT_PROFILE = "default"
 
@@ -131,6 +135,19 @@ class FileMount(BaseModel):
             "never modified."
         ),
     )
+    shared: bool = Field(
+        default=False,
+        examples=[True],
+        description=(
+            "For writable state: keep it in the agent's shared state dir "
+            "(`<agent>/.shared/`) instead of the session's, so it persists across "
+            "sessions (e.g. logins). `ap sessions --rm` leaves it in place. Mounts "
+            "nested inside a shared dir are mounted on top of it; an entry whose "
+            "state already sits at its container path inside one (e.g. a seeded "
+            "`config/settings.json` under a shared `config` dir) is not mounted "
+            "separately, so the agent can replace the file atomically."
+        ),
+    )
     secret: bool = Field(
         default=False,
         examples=[True],
@@ -232,12 +249,17 @@ class AgentConfig(BaseModel):
     def writable_state(self) -> list[FileMount]:
         """Read/write entries whose state lives in the session state dir.
 
-        These are the entries `ensure_host_paths` creates and `ap sessions --rm`
-        cleans up: writable entries with a `seed` (host copy on first run) or no
-        `source` (empty state file/dir). A plain writable host-path mount is
-        excluded — it points at the host directly.
+        These are the entries `ensure_host_paths` creates (non-`shared` ones are
+        what `ap sessions --rm` cleans up): writable entries with a `seed` (host
+        copy on first run) or no `source` (empty state file/dir). A plain
+        writable host-path mount is excluded — it points at the host directly.
         """
         return [f for f in self.files if f.permissions == "rw" and (f.seed or f.source is None)]
+
+    @property
+    def session_state(self) -> list[FileMount]:
+        """Writable state owned by a single session (excludes `shared` entries)."""
+        return [f for f in self.writable_state if not f.shared]
 
     def file_container_path(self, entry: FileMount) -> str:
         """The container path a file entry mounts at."""

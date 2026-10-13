@@ -59,6 +59,9 @@
             Env = [
               "HOME=/root"
               "SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
+              # Keeps .claude.json inside the persisted config dir instead of
+              # the container's ephemeral $HOME.
+              "CLAUDE_CONFIG_DIR=/root/.claude"
             ];
             Entrypoint = [ "${claude}/bin/claude" ];
           };
