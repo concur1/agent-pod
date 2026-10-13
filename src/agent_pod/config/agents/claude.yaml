@@ -21,18 +21,29 @@ files:
     name: CLAUDE.md
     permissions: ro
     description: "Generated global agent instructions"
-  # Writable credentials seeded from the host on first run; the host file is
-  # never modified (the copy lives in the session state dir).
+  # Host settings mirrored read-only (default model, permissions, ...): the
+  # sandbox reads your claude config; edits are made on the host.
+  - source: ~/.claude/settings.json
+    name: settings.json
+    permissions: ro
+    description: "Your claude settings (host mirror)"
+  # Claude Code's app-state file (~/.claude.json): OAuth login, MCP servers,
+  # per-project trust, and global config keys. Bound read/write so a sandbox
+  # login or setting change persists straight back to the host file.
+  - source: ~/.claude.json
+    name: .claude.json
+    target: /root/.claude.json
+    permissions: rw
+    secret: true
+    description: "claude app state and login (host passthrough)"
+  # Linux credential store (~/.claude/.credentials.json): OAuth tokens, written
+  # and refreshed in place by claude.
   - source: ~/.claude/.credentials.json
     name: .credentials.json
     permissions: rw
-    seed: true
     secret: true
-    description: "claude credentials (seeded)"
+    description: "claude credentials (host passthrough)"
   # Writable state for claude's own runtime.
-  - name: config.json
-    permissions: rw
-    description: "claude config (state)"
   - name: history
     permissions: rw
     description: "claude history (state)"
