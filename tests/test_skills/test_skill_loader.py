@@ -1,19 +1,19 @@
-"""Tests for prompt loader module."""
+"""Tests for skill loader module."""
 
 from pathlib import Path
 
 import pytest
 
-from agent_pod.prompts import load_base_prompt
+from agent_pod.skills import load_base_prompt
 
 
 class TestLoadBasePrompt:
-    def test_loads_from_bundled_prompt(self, tmp_path, monkeypatch):
-        bundled = tmp_path / "ephemeral-git-workflow.md"
+    def test_loads_from_bundled_skill(self, tmp_path, monkeypatch):
+        bundled = tmp_path / "SKILL.md"
         bundled.write_text("# bundled prompt")
 
         # Patch the module to use our temp file
-        import agent_pod.prompts.loader as loader
+        import agent_pod.skills.loader as loader
 
         monkeypatch.setattr(loader, "_bundled_prompt", lambda: bundled)
 
@@ -22,13 +22,11 @@ class TestLoadBasePrompt:
 
         assert load_base_prompt() == "# bundled prompt"
 
-    def test_raises_when_no_prompt_found(self, tmp_path, monkeypatch):
-        # No bundled prompt, no user prompt
-        import agent_pod.prompts.loader as loader
+    def test_raises_when_no_skill_found(self, tmp_path, monkeypatch):
+        # No bundled skill, no user skill
+        import agent_pod.skills.loader as loader
 
-        monkeypatch.setattr(
-            loader, "_bundled_prompt", lambda: tmp_path / "missing" / "ephemeral-git-workflow.md"
-        )
+        monkeypatch.setattr(loader, "_bundled_prompt", lambda: tmp_path / "missing" / "SKILL.md")
         monkeypatch.setattr(Path, "home", lambda: tmp_path / "nonexistent_home")
 
         with pytest.raises(FileNotFoundError, match="Ephemeral git-workflow skill file not found"):

@@ -99,7 +99,7 @@ Kinds of entry:
     path. Its body points the agent at the `builtin:ephemeral-git-workflow` skill
     path (when present) and `@`-references any `--context-file` files.
   - `builtin:ephemeral-git-workflow` — the ephemeral git-workflow skill
-    (`prompts/ephemeral-git-workflow.md`) mounted into the agent's skills dir,
+    (`skills/ephemeral-git-workflow/SKILL.md`) mounted into the agent's skills dir,
     loaded on demand (progressive disclosure). It is mounted only when the run
     is ephemeral and the repo has commits (otherwise the agent works directly
     in the host's tree and no git flow is dictated). Each agent's instruction

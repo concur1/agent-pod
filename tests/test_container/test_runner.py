@@ -117,7 +117,7 @@ class TestPiGlobalAgentsMd:
         # In ephemeral git runs the git-workflow skill is mounted as a discoverable
         # skill, not a context prompt
         assert any(
-            a.endswith("/root/.pi/agent/skills/ephemeral-git-workflow.md:ro,z") for a in args
+            a.endswith("/root/.pi/agent/skills/ephemeral-git-workflow/SKILL.md:ro,z") for a in args
         )
         assert not any("/etc/agent-instructions" in a for a in args)
         # Context files are still passed as @ file arguments to pi
@@ -129,7 +129,7 @@ class TestPiGlobalAgentsMd:
         agents_md = tmp_path / "state" / "prompts" / "pi-instructions.md"
         content = agents_md.read_text()
         assert "ephemeral-git-workflow" in content
-        assert "/root/.pi/agent/skills/ephemeral-git-workflow.md" in content
+        assert "/root/.pi/agent/skills/ephemeral-git-workflow/SKILL.md" in content
         assert "/etc/agent-instructions" not in content
         assert "@/root/.config/agent/contexts/ctx.md" in content
 
@@ -154,7 +154,7 @@ class TestPiGlobalAgentsMd:
 
         args = captured["args"]
         assert not any(
-            a.endswith("/root/.pi/agent/skills/ephemeral-git-workflow.md:ro,z") for a in args
+            a.endswith("/root/.pi/agent/skills/ephemeral-git-workflow/SKILL.md:ro,z") for a in args
         )
         content = (tmp_path / "state" / "prompts" / "pi-instructions.md").read_text()
         assert "## Version control" not in content

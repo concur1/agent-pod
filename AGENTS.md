@@ -18,7 +18,7 @@
 - `src/agent_pod/plan.py` — `ap plan` preview: builds the same mount list the runner uses.
 - `src/agent_pod/config/` — config loading (`loader.py`), `ap init` (`init.py`), bundled per-agent flakes (`agents/`).
 - `src/agent_pod/container/` — `builder.py` (image/Dockerfile build), `runner.py` (mounts, git worktree, podman run loop), `cleanup.py`.
-- `src/agent_pod/prompts/` — `loader.py` + the bundled `ephemeral-git-workflow` skill.
+- `src/agent_pod/skills/` — `loader.py` + the bundled `ephemeral-git-workflow` skill.
 - `src/agent_pod/gen_config_docs.py` — regenerates `docs/reference/config.md` from the config models.
 - `src/agent_pod/utils/` — `names.py` (humanized session ids), `paths.py` (package root).
 - `src/agent_pod/log.py` — stdlib logging, pre-wired to stderr.

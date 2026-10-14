@@ -7,13 +7,13 @@ from agent_pod.types import STATE_DIR
 
 def _bundled_prompt() -> Path:
     """Return the ephemeral git-workflow skill bundled with the package."""
-    return Path(__file__).resolve().parent / "ephemeral-git-workflow.md"
+    return Path(__file__).resolve().parent / "ephemeral-git-workflow" / "SKILL.md"
 
 
 def load_base_prompt() -> str:
     """Load the ephemeral git-workflow skill, preferring the bundled copy over the user's.
 
-    Search order: the ephemeral-git-workflow.md bundled with the package, then
+    Search order: the ephemeral-git-workflow/SKILL.md bundled with the package, then
     ~/.config/container-agents/prompts/ephemeral-git-workflow.md (user config).
 
     Raises:
@@ -32,5 +32,5 @@ def load_base_prompt() -> str:
         "Ephemeral git-workflow skill file not found. Expected at:\n"
         f"  - {bundled_prompt}\n"
         f"  - {user_prompt}\n\n"
-        "Please ensure prompts/ephemeral-git-workflow.md exists in the package."
+        "Please ensure skills/ephemeral-git-workflow/SKILL.md exists in the package."
     )

@@ -17,7 +17,7 @@ into it. Because it's a live mount rather than a seeded copy, any skill you
 drop in on the host is discovered by the sandboxed agent with no rebuild and
 no stale copy. The entry is `optional`, so it is skipped silently when the
 host dir is absent, and the ephemeral git-workflow skill (agent-pod's bundled
-`prompts/ephemeral-git-workflow.md`) is generated and mounted via the
+`skills/ephemeral-git-workflow/SKILL.md`) is generated and mounted via the
 `builtin:ephemeral-git-workflow` file entry — but only for ephemeral git runs;
 outside ephemeral mode the agent edits the host's tree directly and no git flow
 is dictated.

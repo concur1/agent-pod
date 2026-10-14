@@ -14,7 +14,7 @@ from pathlib import Path
 from agent_pod.config import get_effective_agent_config
 from agent_pod.container.builder import build_image
 from agent_pod.container.cleanup import cleanup_stale_container, container_running
-from agent_pod.prompts import load_base_prompt
+from agent_pod.skills import load_base_prompt
 from agent_pod.types import SHARED_STATE_DIR, STATE_DIR, AgentConfig, FileMount, ProfileConfig
 from agent_pod.utils.names import get_instance_name, valid_session_name
 
@@ -664,7 +664,7 @@ def _finalize_mounts(mounts: list[Mount]) -> list[Mount]:
     - A nested mount under a directory we own (writable session state) is
       folded into that directory instead of bind-mounting file-under-dir:
       crun cannot create a mount point *inside* a bind-mounted directory whose
-      source lacks the nested path (e.g. `…/skills/ephemeral-git-workflow.md` after the
+      source lacks the nested path (e.g. `…/skills/ephemeral-git-workflow/SKILL.md` after the
       skills profile replaces `…/skills` with a rw state dir). Folding the
       nested content into the on-disk state dir keeps the agent seeing it — the
       nested (builtin) version wins for the exact path, as before — without the

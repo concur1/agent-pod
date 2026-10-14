@@ -132,7 +132,7 @@ class TestBuildPlan:
         # generated instructions at it.
         skills = [m for m in plan.mounts if m.kind == "skill"]
         assert len(skills) == 1
-        assert skills[0].container_path.endswith("skills/ephemeral-git-workflow.md")
+        assert skills[0].container_path.endswith("skills/ephemeral-git-workflow/SKILL.md")
         content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
         assert "## Version control" in content
         assert "ephemeral-git-workflow" in content
@@ -207,7 +207,7 @@ class TestBuildPlan:
     def test_rw_skills_folds_ephemeral_skill_into_state_dir(self, isolated):
         """No file-under-dir bind survives when a profile replaces the skills dir:
         the builtin ephemeral git-workflow is folded into the on-disk state dir instead of
-        mounting at .../skills/ephemeral-git-workflow.md (which crun rejects)."""
+        mounting at .../skills/ephemeral-git-workflow/SKILL.md (which crun rejects)."""
         import subprocess
 
         repo = isolated / "repo"
@@ -226,10 +226,12 @@ class TestBuildPlan:
         rw_skills = FileMount(source="~/.agent/skills", name="skills", permissions="rw", seed=True)
         plan = build_plan(agent="pi", files=[rw_skills], env={}, ephemeral=True)
         nested = [
-            m for m in plan.mounts if m.container_path.endswith("skills/ephemeral-git-workflow.md")
+            m
+            for m in plan.mounts
+            if m.container_path.endswith("skills/ephemeral-git-workflow/SKILL.md")
         ]
         assert nested == []
-        folded = isolated / "state" / "pi" / "skills" / "ephemeral-git-workflow.md"
+        folded = isolated / "state" / "pi" / "skills" / "ephemeral-git-workflow" / "SKILL.md"
         assert folded.exists()
         assert "ephemeral-git-workflow" in folded.read_text()
 
