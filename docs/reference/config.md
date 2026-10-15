@@ -50,7 +50,7 @@ Each entry of the `files` list.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `source` | `str \| null` | `null` | Host file or folder to mount, or a `builtin:` generator id (`builtin:instructions`, `builtin:ephemeral-git-workflow`) for content agent-pod generates at runtime. Omit for a writable state file/dir with no host seed (it is created empty in the session state dir). |
+| `source` | `str \| null` | `null` | Host file or folder to mount, or a `builtin:` generator id (`builtin:instructions`, `builtin:ephemeral-git-workflow`, `builtin:agent-pod-config`) for content agent-pod generates at runtime. Omit for a writable state file/dir with no host seed (it is created empty in the session state dir). |
 | `name` | `str` | `—` | Mount name; the container path defaults to `<container_home>/<name>`. Slash-separated names nest (e.g. `skills/ephemeral-git-workflow/SKILL.md`). |
 | `permissions` | `ro \| rw` | `—` | Mount permissions: read-only (`ro`) or read/write (`rw`). |
 | `description` | `str \| null` | `null` | Human-readable description shown by `ap plan`. |

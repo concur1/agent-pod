@@ -67,8 +67,15 @@ class TestBuildPlan:
         kinds = [m.kind for m in plan.mounts]
         assert "repo" in kinds
         assert "instructions" in kinds
-        # Outside ephemeral git mode the git-workflow skill is not mounted.
-        assert "skill" not in kinds
+        # The config skill is always mounted; the git-workflow skill is not
+        # outside ephemeral git mode.
+        skill_paths = [m.container_path for m in plan.mounts if m.kind == "skill"]
+        assert skill_paths == ["/root/.pi/agent/skills/agent-pod-config/SKILL.md"]
+        content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
+        assert "## Configuring this sandbox" in content
+        assert "/root/.pi/agent/skills/agent-pod-config/SKILL.md" in content
+        skill_host = isolated / "state" / "prompts" / "agent-pod-config.md"
+        assert "agent-pod-config" in skill_host.read_text()
 
     def test_secret_envs_and_credential_are_secrets(self, isolated, passthrough_config):
         host_auth = isolated / ".local" / "share" / "opencode" / "auth.json"
@@ -128,11 +135,14 @@ class TestBuildPlan:
         by_kind = {m.kind: m for m in plan.mounts}
         assert by_kind["repo"].host_path == repo / ".git"
         assert by_kind["repo"].container_path == "/repo/.git"
-        # Ephemeral git runs mount the ephemeral git-workflow skill and point the
-        # generated instructions at it.
+        # Ephemeral git runs add the ephemeral git-workflow skill alongside the
+        # always-mounted config skill, and point the generated instructions at it.
         skills = [m for m in plan.mounts if m.kind == "skill"]
-        assert len(skills) == 1
-        assert skills[0].container_path.endswith("skills/ephemeral-git-workflow/SKILL.md")
+        git_skills = [
+            m for m in skills if m.container_path.endswith("skills/ephemeral-git-workflow/SKILL.md")
+        ]
+        assert len(git_skills) == 1
+        assert len(skills) == 2
         content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
         assert "## Version control" in content
         assert "ephemeral-git-workflow" in content
@@ -150,7 +160,9 @@ class TestBuildPlan:
         assert by_kind["repo"].container_path == "/sandbox"
         assert not any(e.internal for e in plan.envs)
         # Fallback to the direct mount means no git flow is dictated either.
-        assert not any(m.kind == "skill" for m in plan.mounts)
+        assert not any(
+            m.container_path.endswith("skills/ephemeral-git-workflow/SKILL.md") for m in plan.mounts
+        )
         content = (isolated / "state" / "prompts" / "pi-instructions.md").read_text()
         assert "## Version control" not in content
 

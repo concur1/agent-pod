@@ -24,6 +24,12 @@ files:
     name: skills/ephemeral-git-workflow/SKILL.md
     permissions: ro
     description: "ephemeral git-workflow skill (from agent-pod)"
+  # agent-pod's config-authoring skill, generated at runtime and mounted on
+  # every run. Nested as <name>/SKILL.md so it shadows a same-named host skill.
+  - source: builtin:agent-pod-config
+    name: skills/agent-pod-config/SKILL.md
+    permissions: ro
+    description: "agent-pod .agent-pod.yaml config skill (from agent-pod)"
   # Generated global instruction file (AGENTS.md) auto-loaded by opencode.
   - source: builtin:instructions
     name: AGENTS.md

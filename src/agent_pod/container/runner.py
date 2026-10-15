@@ -14,7 +14,7 @@ from pathlib import Path
 from agent_pod.config import get_effective_agent_config
 from agent_pod.container.builder import build_image
 from agent_pod.container.cleanup import cleanup_stale_container, container_running
-from agent_pod.skills import load_base_prompt
+from agent_pod.skills import load_skill
 from agent_pod.types import SHARED_STATE_DIR, STATE_DIR, AgentConfig, FileMount, ProfileConfig
 from agent_pod.utils.names import get_instance_name, valid_session_name
 
@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 # mounting from the host. Used by `files` entries in the agent configs.
 BUILTIN_INSTRUCTIONS = "builtin:instructions"
 BUILTIN_EPHEMERAL_GIT_WORKFLOW = "builtin:ephemeral-git-workflow"
+BUILTIN_AGENT_POD_CONFIG = "builtin:agent-pod-config"
+
+# `builtin:` ids that mount a bundled skill, mapped to the skill's directory
+# name under `agent_pod/skills/` (its SKILL.md is what gets mounted).
+BUILTIN_SKILLS = {
+    BUILTIN_EPHEMERAL_GIT_WORKFLOW: "ephemeral-git-workflow",
+    BUILTIN_AGENT_POD_CONFIG: "agent-pod-config",
+}
 
 # Env vars whose name looks like a credential are treated as secrets.
 SECRET_ENV_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.IGNORECASE)
@@ -368,18 +376,19 @@ def ensure_host_paths(
 
 
 def _instructions_content(
-    skill_container_path: str | None,
+    mounted_skills: Mapping[str, str],
     context_entries: list[FileMount],
     config: AgentConfig,
     mounts: list[Mount],
     security: SecurityProfile,
     env: Mapping[str, str],
 ) -> str:
-    """The generated AGENTS.md: the ephemeral git-workflow conventions plus the sandbox's grants.
+    """The generated AGENTS.md: the bundled skill conventions plus the sandbox's grants.
 
     The agent reads the same launch screen `ap plan` shows, so it understands
     what it can touch: mounts (with secrets flagged), forwarded env vars with
-    their descriptions, and the network posture.
+    their descriptions, and the network posture. `mounted_skills` maps a
+    `builtin:` skill id to the container path it was mounted at.
     """
     lines = ["# Agent instructions", ""]
     lines.extend(
@@ -395,14 +404,26 @@ def _instructions_content(
     )
     if config.prompt:
         lines.extend(["## Instructions", "", config.prompt, ""])
-    if skill_container_path:
+    git_skill = mounted_skills.get(BUILTIN_EPHEMERAL_GIT_WORKFLOW)
+    if git_skill:
         lines.extend(
             [
                 "## Version control",
                 "",
                 "Follow the `ephemeral-git-workflow` skill for all code change operations.",
-                f"Load it with `read {skill_container_path}` before any code changes; it covers"
+                f"Load it with `read {git_skill}` before any code changes; it covers"
                 " the commit flow and working conventions.",
+            ]
+        )
+    config_skill = mounted_skills.get(BUILTIN_AGENT_POD_CONFIG)
+    if config_skill:
+        lines.extend(
+            [
+                "## Configuring this sandbox",
+                "",
+                "Follow the `agent-pod-config` skill when creating or editing a"
+                " `.agent-pod.yaml` file (mounts, profiles, passthrough env vars, nix"
+                f" packages). Load it with `read {config_skill}` before changing that config.",
             ]
         )
     if context_entries:
@@ -445,14 +466,6 @@ def _instructions_content(
     return "\n".join(lines)
 
 
-def _builtin_container_path(config: AgentConfig, builtin: str) -> str | None:
-    """The container path of a `builtin:` file entry, if any."""
-    for entry in config.files:
-        if entry.source == builtin:
-            return config.file_container_path(entry)
-    return None
-
-
 def build_mounts(
     *,
     agent_name: str,
@@ -474,6 +487,7 @@ def build_mounts(
     generated instructions and passed to pi as `@<path>` args.
     """
     mounts: list[Mount] = []
+    mounted_skills: dict[str, str] = {}
     context_entries = [
         e for e in config.files if e.context and e.source and Path(e.source).expanduser().exists()
     ]
@@ -523,17 +537,18 @@ def build_mounts(
             # Generated after the full mount list is assembled, so it can describe
             # the whole sandbox (mounts, env vars, network).
             continue
-        if entry.source == BUILTIN_EPHEMERAL_GIT_WORKFLOW:
-            # Ephemeral-only: the skill exists to tell the agent its work only
-            # reaches the host as commits on its per-session branch. With the
-            # working tree mounted directly that flow does not exist, so dictating
-            # git behaviour would be wrong — skip the mount and the
-            # version-control section of the generated instructions.
-            if ephemeral_repo is None:
+        if entry.source in BUILTIN_SKILLS:
+            # The ephemeral git-workflow skill only applies when the container owns
+            # the worktree (its whole point is that only commits reach the host);
+            # mounting it with the tree mounted directly would dictate a flow that
+            # does not exist. Other bundled skills apply in every run.
+            if entry.source == BUILTIN_EPHEMERAL_GIT_WORKFLOW and ephemeral_repo is None:
                 continue
+            skill_name = BUILTIN_SKILLS[entry.source]
             prompts_dir.mkdir(parents=True, exist_ok=True)
-            host = prompts_dir / "ephemeral-git-workflow.md"
-            host.write_text(load_base_prompt())
+            host = prompts_dir / f"{skill_name}.md"
+            host.write_text(load_skill(skill_name))
+            mounted_skills[entry.source] = container_path
             mounts.append(
                 Mount(
                     host_path=host,
@@ -629,12 +644,7 @@ def build_mounts(
         host = prompts_dir / f"{agent_name}-instructions.md"
         host.write_text(
             _instructions_content(
-                # Version-control section only when the ephemeral skill is mounted.
-                (
-                    _builtin_container_path(config, BUILTIN_EPHEMERAL_GIT_WORKFLOW)
-                    if ephemeral_repo is not None
-                    else None
-                ),
+                mounted_skills,
                 context_entries,
                 config,
                 mounts,

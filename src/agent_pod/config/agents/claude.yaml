@@ -26,6 +26,12 @@ files:
     permissions: ro
     optional: true
     description: "Your global skills dir (host passthrough)"
+  # agent-pod's config-authoring skill, generated at runtime and mounted on
+  # every run. Nested as <name>/SKILL.md so it shadows a same-named host skill.
+  - source: builtin:agent-pod-config
+    name: skills/agent-pod-config/SKILL.md
+    permissions: ro
+    description: "agent-pod .agent-pod.yaml config skill (from agent-pod)"
   # Generated global instruction file (CLAUDE.md), always mounted at the
   # container home so it loads regardless of where the repo's own CLAUDE.md
   # sits.

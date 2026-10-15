@@ -76,7 +76,8 @@ class FileMount(BaseModel):
         examples=["~/dotfiles/aliases.sh"],
         description=(
             "Host file or folder to mount, or a `builtin:` generator id "
-            "(`builtin:instructions`, `builtin:ephemeral-git-workflow`) for content agent-pod "
+            "(`builtin:instructions`, `builtin:ephemeral-git-workflow`, "
+            "`builtin:agent-pod-config`) for content agent-pod "
             "generates at runtime. Omit for a writable state file/dir with no host "
             "seed (it is created empty in the session state dir)."
         ),
