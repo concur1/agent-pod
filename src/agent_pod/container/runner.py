@@ -769,7 +769,6 @@ def resolve_run(
     cwd: Path,
     user_cfg: ProfileConfig | None = None,
     context_files: list[FileMount] | None = None,
-    files: list[FileMount] | None = None,
     ephemeral: bool = False,
     env: Mapping[str, str] | None = None,
     settings_file: Path | None = None,
@@ -786,9 +785,8 @@ def resolve_run(
         ephemeral = bool(user_cfg.ephemeral)
     # Profile `context_files` are just additional `files` entries; append them so
     # mounts, instructions, and pi args all derive from one list.
-    extra_files = [*(files or []), *(context_files or [])]
-    if extra_files:
-        config = config.model_copy(update={"files": [*config.files, *extra_files]})
+    if context_files:
+        config = config.model_copy(update={"files": [*config.files, *context_files]})
 
     host_dir = (
         ensure_host_paths(agent_name, config, session, settings_file)
@@ -885,7 +883,6 @@ def run_agent(
     session: str = "default",
     profile: str = "default",
     context_files: list[FileMount] | None = None,
-    files: list[FileMount] | None = None,
     settings_file: Path | None = None,
     ephemeral: bool = False,
     user_cfg: ProfileConfig | None = None,
@@ -894,8 +891,7 @@ def run_agent(
 
     `user_cfg` is the resolved config (top-level defaults + active profile
     overrides, see UserConfig.effective); when given it drives the agent config
-    (passthrough envs, tmpfs, flake, file mounts...) and `ephemeral`. `files`
-    remains for extra runtime-only mounts appended after the config's.
+    (passthrough envs, tmpfs, flake, file mounts...) and `ephemeral`.
     """
     config = get_effective_agent_config(agent_name, user_cfg)
 
@@ -948,7 +944,6 @@ def run_agent(
         cwd=Path.cwd(),
         user_cfg=user_cfg,
         context_files=context_files,
-        files=files,
         ephemeral=ephemeral,
         settings_file=settings_file,
         prepare_state=True,

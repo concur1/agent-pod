@@ -7,7 +7,7 @@ import pytest
 from agent_pod.config import get_effective_agent_config
 from agent_pod.container.runner import Mount
 from agent_pod.plan import EnvVar, Plan, build_plan, render_plan
-from agent_pod.types import FileMount, PassthroughEnv
+from agent_pod.types import FileMount, PassthroughEnv, ProfileConfig
 
 
 def _envs(*names: str) -> list[PassthroughEnv]:
@@ -210,7 +210,7 @@ class TestBuildPlan:
         rw_skills = FileMount(source="~/.agent/skills", name="skills", permissions="rw", seed=True)
         plan = build_plan(
             agent="pi",
-            files=[rw_skills],
+            user_cfg=ProfileConfig(files=[rw_skills]),
             env={},
         )
         skills_mounts = [m for m in plan.mounts if m.container_path == "/root/.pi/agent/skills"]
@@ -238,7 +238,9 @@ class TestBuildPlan:
         )
 
         rw_skills = FileMount(source="~/.agent/skills", name="skills", permissions="rw", seed=True)
-        plan = build_plan(agent="pi", files=[rw_skills], env={}, ephemeral=True)
+        plan = build_plan(
+            agent="pi", user_cfg=ProfileConfig(files=[rw_skills], ephemeral=True), env={}
+        )
         nested = [
             m
             for m in plan.mounts

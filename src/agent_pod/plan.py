@@ -65,7 +65,6 @@ def build_plan(
     agent: str,
     session: str = "default",
     context_files: list[FileMount] | None = None,
-    files: list[FileMount] | None = None,
     user_cfg: ProfileConfig | None = None,
     env: Mapping[str, str] | None = None,
     cwd: Path | None = None,
@@ -76,8 +75,7 @@ def build_plan(
 
     `user_cfg` is the resolved config (top-level defaults + active profile
     overrides); when given it drives the agent config (passthrough envs, tmpfs,
-    flake, file mounts...) and `ephemeral`. `files` remains for extra
-    runtime-only mounts (CLI --context-file entries).
+    flake, file mounts...) and `ephemeral`.
     """
     env = os.environ if env is None else env
     cwd = Path.cwd() if cwd is None else cwd
@@ -88,7 +86,6 @@ def build_plan(
         cwd=cwd,
         user_cfg=user_cfg,
         context_files=context_files,
-        files=files,
         ephemeral=ephemeral,
         env=env,
     )
