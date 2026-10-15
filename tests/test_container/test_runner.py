@@ -69,6 +69,24 @@ def _capture_run(monkeypatch, error=None):
     return captured
 
 
+def _patch_prereqs(monkeypatch, tmp_path, *, patch_subprocess=True):
+    """Point the runner's state dir at tmp_path and stub cleanup + image build.
+
+    `patch_subprocess=False` keeps `runner.subprocess.run` real, for the
+    ephemeral-git tests that shell out to git to read HEAD and prune worktrees.
+    """
+    monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
+    monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
+    monkeypatch.setattr(
+        "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
+    )
+    if patch_subprocess:
+        monkeypatch.setattr(
+            "agent_pod.container.runner.subprocess.run",
+            lambda *a, **k: MagicMock(returncode=1, stderr=""),
+        )
+
+
 class TestPiGlobalAgentsMd:
     def test_pi_instruction_path_is_global_agents_md(self):
         config = get_agent_config("pi")
@@ -661,17 +679,6 @@ class TestClaudeSharedConfig:
 
 
 class TestRunAgentSessionValidation:
-    def _patch_prereqs(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
-        monkeypatch.setattr(
-            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
-        )
-        monkeypatch.setattr(
-            "agent_pod.container.runner.subprocess.run",
-            lambda *a, **k: MagicMock(returncode=1, stderr=""),
-        )
-
     @pytest.mark.parametrize(
         "bad",
         ["../pi2", "/tmp/evil", "a/b", "a\\b", "..", ".", "a b", "a\tb"],
@@ -679,7 +686,7 @@ class TestRunAgentSessionValidation:
     def test_unsafe_session_name_exits_and_creates_no_state(
         self, tmp_path, monkeypatch, capsys, bad
     ):
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path)
         with pytest.raises(SystemExit) as excinfo:
             run_agent("pi", [], session=bad)
         assert excinfo.value.code == 2
@@ -688,7 +695,7 @@ class TestRunAgentSessionValidation:
         assert not (tmp_path / "state" / "pi").exists()
 
     def test_valid_session_name_starts(self, tmp_path, monkeypatch, capsys):
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path)
         captured = _capture_run(monkeypatch)
         with pytest.raises(SystemExit):
             run_agent("pi", [], session="dev")
@@ -842,19 +849,8 @@ class TestEnsureHostPaths:
 class TestRunAgentErrorHandling:
     """Tests for the podman launch failure paths in run_agent."""
 
-    def _patch_prereqs(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
-        monkeypatch.setattr(
-            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
-        )
-        monkeypatch.setattr(
-            "agent_pod.container.runner.subprocess.run",
-            lambda *a, **k: MagicMock(returncode=1, stderr=""),
-        )
-
     def test_podman_not_found_exits_with_message(self, tmp_path, monkeypatch, capsys):
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path)
         _capture_run(monkeypatch, error=FileNotFoundError("podman"))
         with pytest.raises(SystemExit) as excinfo:
             run_agent("pi", ["hello"])
@@ -862,7 +858,7 @@ class TestRunAgentErrorHandling:
         assert "podman" in capsys.readouterr().err.lower()
 
     def test_generic_exec_error_exits_with_message(self, tmp_path, monkeypatch, capsys):
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path)
         _capture_run(monkeypatch, error=RuntimeError("boom"))
         with pytest.raises(SystemExit) as excinfo:
             run_agent("pi", ["hello"])
@@ -871,7 +867,7 @@ class TestRunAgentErrorHandling:
 
     def test_missing_settings_file_warns_and_falls_back(self, tmp_path, monkeypatch, capsys):
         """A missing --settings-file warns on stderr and falls back to default seeding."""
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path)
         captured = _capture_run(monkeypatch)
         with pytest.raises(SystemExit):
             run_agent("pi", ["hello"], settings_file=tmp_path / "nonexistent.json")
@@ -883,19 +879,8 @@ class TestRunAgentDirectWorkspaceFallback:
     """With ephemeral off (or the cwd not a git repo) the agent works directly
     in the mounted /sandbox working tree."""
 
-    def _patch_prereqs(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
-        monkeypatch.setattr(
-            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
-        )
-        monkeypatch.setattr(
-            "agent_pod.container.runner.subprocess.run",
-            lambda *a, **k: MagicMock(returncode=1, stderr=""),
-        )
-
     def test_works_directly_in_sandbox(self, tmp_path, monkeypatch):
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path)
         captured = _capture_run(monkeypatch)
         with pytest.raises(SystemExit):
             run_agent("pi", ["hello"])
@@ -997,19 +982,9 @@ class TestRunAgentEphemeral:
         )
         return repo
 
-    def _patch_prereqs(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
-        monkeypatch.setattr(
-            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
-        )
-        # runner.subprocess.run is intentionally NOT patched: podman never runs
-        # (launch is mocked), so the only subprocess calls are the real git ones
-        # that read HEAD and prune worktree metadata.
-
     def test_mounts_git_and_passes_worktree_env(self, tmp_path, monkeypatch):
         repo = self._make_repo(tmp_path)
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path, patch_subprocess=False)
         captured = _capture_run(monkeypatch)
         monkeypatch.chdir(repo)
 
@@ -1044,7 +1019,7 @@ class TestRunAgentEphemeral:
         with a targeted remove, not a blanket prune, so a live session's
         worktree is never yanked out from under it."""
         repo = self._make_repo(tmp_path)
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path, patch_subprocess=False)
         calls = []
         real_run = subprocess.run
 
@@ -1078,7 +1053,7 @@ class TestRunAgentEphemeral:
         subprocess.run(
             ["git", "-C", str(repo), "init", "-b", "main"], check=True, capture_output=True
         )
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path, patch_subprocess=False)
         captured = _capture_run(monkeypatch)
         monkeypatch.chdir(repo)
 
@@ -1118,13 +1093,6 @@ class TestPruneSessionBranch:
             text=True,
         ).stdout
         return set(out.splitlines())
-
-    def _patch_prereqs(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr("agent_pod.container.runner.cleanup_stale_container", lambda name: None)
-        monkeypatch.setattr(
-            "agent_pod.container.runner.build_image", lambda name, cfg, settings_file=None: None
-        )
 
     def test_prunes_branch_equal_to_main(self, tmp_path):
         repo = self._make_repo(tmp_path)
@@ -1202,7 +1170,7 @@ class TestPruneSessionBranch:
         """Closing a session that left the branch at main (no commits) drops it."""
         repo = self._make_repo(tmp_path)
         subprocess.run(["git", "-C", str(repo), "branch", "agent/fixes/crisp-lamp"])
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path, patch_subprocess=False)
         # The launch sweep would prune this branch too; pin this test to the
         # close-path prune it's named after.
         monkeypatch.setattr("agent_pod.container.runner.tidy_noop_branches", lambda cwd: 0)
@@ -1223,7 +1191,7 @@ class TestPruneSessionBranch:
         subprocess.run(
             ["git", "-C", str(repo), "commit", "-m", "work"], check=True, capture_output=True
         )
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path, patch_subprocess=False)
         _capture_run(monkeypatch)
         monkeypatch.setattr("agent_pod.container.runner.tidy_noop_branches", lambda cwd: 0)
         monkeypatch.chdir(repo)
@@ -1284,7 +1252,7 @@ class TestPruneSessionBranch:
             ["git", "-C", str(repo), "commit", "-m", "work"], check=True, capture_output=True
         )
         subprocess.run(["git", "-C", str(repo), "switch", "main"])
-        self._patch_prereqs(tmp_path, monkeypatch)
+        _patch_prereqs(monkeypatch, tmp_path, patch_subprocess=False)
         _capture_run(monkeypatch)
         monkeypatch.chdir(repo)
 
