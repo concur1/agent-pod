@@ -161,6 +161,23 @@ def _effective_user_config(
     return profile, user_cfg.effective(profile)
 
 
+def _resolve_target(
+    args: argparse.Namespace, subcommand: str
+) -> tuple[str, str, ProfileConfig, list[FileMount]]:
+    """Resolve (profile, agent, effective config, context files) for a subcommand.
+
+    Shared by `run`/`shell`/`plan`/`context`: CLI flags win over the effective
+    (profile-resolved) config, then defaults.
+    """
+    user_cfg = get_user_config()
+    profile, eff = _effective_user_config(user_cfg, args.profile)
+    agent = _resolve_agent(args.agent, eff, subcommand)
+    context_file_args = (
+        args.context_file if args.context_file is not None else (eff.context_files or [])
+    )
+    return profile, agent, eff, _parse_context_files(context_file_args)
+
+
 def _used_session_ids(agent_dir: Path) -> set[str]:
     """Session names already taken (state dirs), so fresh auto sessions don't collide."""
     if not agent_dir.is_dir():
@@ -213,9 +230,7 @@ def _run(args: argparse.Namespace, use_bash: bool, label: str) -> None:
     from agent_pod.config.init import ensure_user_config
 
     ensure_user_config(agent_hint=args.agent)
-    user_cfg = get_user_config()
-    profile, eff = _effective_user_config(user_cfg, args.profile)
-    agent = _resolve_agent(args.agent, eff, label)
+    profile, agent, eff, context_files = _resolve_target(args, label)
     # `ap shell`: attach to an already-open session instead of launching a fresh
     # container into an empty /sandbox worktree (which the bash entrypoint skips).
     if use_bash:
@@ -231,10 +246,6 @@ def _run(args: argparse.Namespace, use_bash: bool, label: str) -> None:
     extra_args = [a for a in args.extra_args if a != "--"]
     if not extra_args and not use_bash:
         extra_args = eff.extra_args or []
-    context_file_args = (
-        args.context_file if args.context_file is not None else (eff.context_files or [])
-    )
-    context_files = _parse_context_files(context_file_args)
     # The settings-file bake is pi-specific; other agents never read it, so only
     # resolve it (and warn about a missing file) for the pi agent.
     settings_file = (
@@ -419,13 +430,7 @@ def _remove_session(agent: str, session: str, config: AgentConfig) -> None:
 def cmd_plan(args: argparse.Namespace) -> None:
     from agent_pod.plan import build_plan, color_enabled, render_plan
 
-    user_cfg = get_user_config()
-    profile, eff = _effective_user_config(user_cfg, args.profile)
-    agent = _resolve_agent(args.agent, eff, "plan")
-    context_file_args = (
-        args.context_file if args.context_file is not None else (eff.context_files or [])
-    )
-    context_files = _parse_context_files(context_file_args)
+    profile, agent, eff, context_files = _resolve_target(args, "plan")
     plan = build_plan(
         agent=agent,
         session=args.session or eff.session or profile,
@@ -447,13 +452,7 @@ def cmd_context(args: argparse.Namespace) -> None:
     from agent_pod.container.runner import BASE_STATE_DIR
     from agent_pod.plan import build_plan
 
-    user_cfg = get_user_config()
-    profile, eff = _effective_user_config(user_cfg, args.profile)
-    agent = _resolve_agent(args.agent, eff, "context")
-    context_file_args = (
-        args.context_file if args.context_file is not None else (eff.context_files or [])
-    )
-    context_files = _parse_context_files(context_file_args)
+    profile, agent, eff, context_files = _resolve_target(args, "context")
     build_plan(
         agent=agent,
         session=args.session or eff.session or profile,
@@ -511,20 +510,17 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(dest="subcommand", help="Available subcommands")
 
-    # Options shared by `run` and `shell` (the two ways to launch a sandbox): the
-    # profile is always the positional, the harness comes from the profile's `agent`,
-    # else the config default, with `--agent` to override explicitly.
-    _RUN_OPTIONS = _CliParser(add_help=False)
-    _RUN_OPTIONS.add_argument(
+    # Options shared by every profile-addressed subcommand (run/shell/plan/context):
+    # the profile is always the positional, the harness comes from the profile's
+    # `agent`, else the config default, with `--agent` to override explicitly.
+    _TARGET_OPTIONS = _CliParser(add_help=False)
+    _TARGET_OPTIONS.add_argument(
         "--agent",
         choices=get_all_agent_names(),
         default=None,
-        help=(
-            "Harness agent to launch (defaults to the profile's `agent`, "
-            "else the config's `agent`)."
-        ),
+        help="Agent override (defaults to the profile's `agent`, else the config's `agent`).",
     )
-    _RUN_OPTIONS.add_argument(
+    _TARGET_OPTIONS.add_argument(
         "--session",
         default=None,
         help=(
@@ -534,7 +530,7 @@ def main() -> None:
             "(e.g. crisp-lamp) and its own branch."
         ),
     )
-    _RUN_OPTIONS.add_argument(
+    _TARGET_OPTIONS.add_argument(
         "--context-file",
         action="append",
         dest="context_file",
@@ -544,6 +540,9 @@ def main() -> None:
             "Can be specified multiple times."
         ),
     )
+
+    # `run`/`shell` additionally choose the settings.json baked into the image.
+    _RUN_OPTIONS = _CliParser(add_help=False, parents=[_TARGET_OPTIONS])
     _RUN_OPTIONS.add_argument(
         "--settings-file",
         metavar="HOST_PATH",
@@ -667,7 +666,7 @@ def main() -> None:
 
     plan_parser = subparsers.add_parser(
         "plan",
-        parents=[_VERBOSE],
+        parents=[_VERBOSE, _TARGET_OPTIONS],
         help="Show what files, secrets, and env vars the agent will be granted",
     )
     plan_parser.add_argument(
@@ -676,34 +675,10 @@ def main() -> None:
         default=None,
         help="Named profile to preview (branch namespace + run overrides).",
     )
-    plan_parser.add_argument(
-        "--agent",
-        choices=get_all_agent_names(),
-        default=None,
-        help=(
-            "Harness agent to preview (defaults to the profile's `agent`, "
-            "else the config's `agent`)."
-        ),
-    )
-    plan_parser.add_argument(
-        "--session",
-        default=None,
-        help="Session name to preview (defaults to the profile name, or 'default' without one)",
-    )
-    plan_parser.add_argument(
-        "--context-file",
-        action="append",
-        dest="context_file",
-        default=None,
-        help=(
-            "Mount a context file into the agent (format: HOST_PATH[:NAME]). "
-            "Can be specified multiple times."
-        ),
-    )
 
     context_parser = subparsers.add_parser(
         "context",
-        parents=[_VERBOSE],
+        parents=[_VERBOSE, _TARGET_OPTIONS],
         help="Print the generated agent instructions (AGENTS.md) a profile gives the agent",
     )
     context_parser.add_argument(
@@ -711,30 +686,6 @@ def main() -> None:
         nargs="?",
         default=None,
         help="Named profile to render (branch namespace + run overrides).",
-    )
-    context_parser.add_argument(
-        "--agent",
-        choices=get_all_agent_names(),
-        default=None,
-        help=(
-            "Harness agent to render (defaults to the profile's `agent`, "
-            "else the config's `agent`)."
-        ),
-    )
-    context_parser.add_argument(
-        "--session",
-        default=None,
-        help="Session name to render (defaults to the profile name, or 'default' without one)",
-    )
-    context_parser.add_argument(
-        "--context-file",
-        action="append",
-        dest="context_file",
-        default=None,
-        help=(
-            "Mount a context file into the agent (format: HOST_PATH[:NAME]). "
-            "Can be specified multiple times."
-        ),
     )
 
     args = parser.parse_args()
