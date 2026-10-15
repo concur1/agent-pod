@@ -1,4 +1,4 @@
-.PHONY: clean check lint typecheck test test-integration format docs-ref build run
+.PHONY: clean check lint typecheck test test-integration format docs-ref docs-serve build run
 
 # Run all checks: ruff lint + ty type check
 check: lint typecheck
@@ -28,6 +28,10 @@ format:
 # (run after editing the config models in src/agent_pod/types.py)
 docs-ref:
 	uv run python -m agent_pod.gen_config_docs
+
+# Build and serve the docs site locally with live reload
+docs-serve:
+	uv run zensical serve
 
 # Remove Python bytecode caches. When a package is renamed or removed, its
 # old __pycache__ dirs linger here, ignored by git and invisible to git status.
