@@ -100,36 +100,42 @@ def get_user_config() -> UserConfig:
     return merged
 
 
+# ProfileConfig keys that are not AgentConfig fields: run-level options plus the
+# flake shorthands handled separately below. Everything else (image_tag, files,
+# tmpfs_mounts, ...) maps to AgentConfig one-for-one.
+_NON_AGENT_KEYS = {
+    "agent",
+    "context_files",
+    "extra_args",
+    "settings_file",
+    "session",
+    "ephemeral",
+    "extra_packages",
+    "allow_unfree",
+    "permitted_insecure",
+    "profile",
+    "profiles",
+}
+
+
 def _user_agent_overrides(user_cfg: ProfileConfig) -> dict:
     """Extract AgentConfig-shaped overrides from a resolved user config.
 
-    The top-level `extra_packages` field is shorthand for `flake.extra_packages`
-    and takes precedence over a directly-nested `flake.extra_packages`. Accepts
-    a `ProfileConfig` (top-level defaults or an effective profile), which
+    Every config field maps straight through except run-level keys and the flake
+    shorthands: `extra_packages`/`allow_unfree`/`permitted_insecure` land under
+    `flake` and take precedence over a directly-nested `flake` field. Accepts a
+    `ProfileConfig` (top-level defaults or an effective profile), which
     `UserConfig` also is.
     """
-    result: dict = {}
-    if user_cfg.flake is not None:
-        result["flake"] = user_cfg.flake.model_dump(exclude_none=True)
-    for field in (
-        "image_tag",
-        "container_name",
-        "container_home",
-        "tmpfs_mounts",
-        "passthrough_envs",
-        "prompt",
-    ):
-        value = getattr(user_cfg, field)
-        if value is not None:
-            result[field] = value
-    if user_cfg.files is not None:
-        result["files"] = [f.model_dump(exclude_none=True) for f in user_cfg.files]
-    if user_cfg.extra_packages is not None:
-        result.setdefault("flake", {})["extra_packages"] = user_cfg.extra_packages
-    if user_cfg.allow_unfree is not None:
-        result.setdefault("flake", {})["allow_unfree"] = user_cfg.allow_unfree
-    if user_cfg.permitted_insecure is not None:
-        result.setdefault("flake", {})["permitted_insecure"] = user_cfg.permitted_insecure
+    result = user_cfg.model_dump(exclude_none=True, exclude=_NON_AGENT_KEYS)
+    shorthand = {
+        "extra_packages": user_cfg.extra_packages,
+        "allow_unfree": user_cfg.allow_unfree,
+        "permitted_insecure": user_cfg.permitted_insecure,
+    }
+    overrides = {key: value for key, value in shorthand.items() if value is not None}
+    if overrides:
+        result.setdefault("flake", {}).update(overrides)
     return result
 
 
