@@ -126,9 +126,6 @@ def render_plan(plan: Plan, *, color: bool = True) -> str:
     home = Path.home()
     width = 60
 
-    def _word(mount: Mount) -> str:
-        return _ACCESS_WORDS.get(mount.mode, "")
-
     # Read/write mounts first, then read-only; tmpfs has no rank (sorted last).
     rank = {"rw": 0, "ro": 1}
     lines = [
@@ -140,7 +137,7 @@ def render_plan(plan: Plan, *, color: bool = True) -> str:
     ]
 
     for mount in sorted((m for m in plan.mounts if not m.tmpfs), key=lambda m: rank.get(m.mode, 9)):
-        word = _word(mount)
+        word = _ACCESS_WORDS.get(mount.mode, "")
         if color and _dangerous(mount, home):
             word = _RED + word + _RESET
         secret = _secret_tag(color) if mount.secret else ""

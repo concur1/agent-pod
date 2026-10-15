@@ -369,20 +369,14 @@ def _profile_summary(profile: ProfileConfig) -> str:
     return f"  [{', '.join(parts)}]" if parts else ""
 
 
-def _default_session_detected(agent_dir: Path, config: AgentConfig) -> bool:
-    return (
+def _detect_sessions(agent_dir: Path, config: AgentConfig) -> list[str]:
+    """Named session dirs plus `default` when its own state is present."""
+    sessions = {d.name for d in agent_dir.iterdir() if d.is_dir() and not d.name.startswith(".")}
+    default_present = (
         any((agent_dir / entry.name).exists() for entry in config.session_state)
         or (agent_dir / ".gitconfig").exists()
     )
-
-
-def _named_sessions(agent_dir: Path) -> list[str]:
-    return [d.name for d in agent_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
-
-
-def _detect_sessions(agent_dir: Path, config: AgentConfig) -> list[str]:
-    sessions = set(_named_sessions(agent_dir))
-    if _default_session_detected(agent_dir, config):
+    if default_present:
         sessions.add("default")
     return sorted(sessions)
 

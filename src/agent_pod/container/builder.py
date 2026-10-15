@@ -152,11 +152,6 @@ def _write_extra_packages_check(flake_dir: Path, extra_packages: list[str]) -> P
     return path
 
 
-def _extra_packages_check_script() -> str:
-    """The shell pre-flight eval of check-extra-packages.nix; runs nix-in-docker."""
-    return _tpl("check-extra-packages.sh")
-
-
 _EXTRA_PACKAGE_ERRORS = {
     "unknown": (
         "is not in this flake's locked nixpkgs. `extra_packages` takes nixpkgs "
@@ -205,7 +200,7 @@ def _check_extra_packages(context_dir: Path, extra_packages: list[str]) -> None:
             NIXOS_IMAGE,
             "/bin/sh",
             "-c",
-            _extra_packages_check_script(),
+            _tpl("check-extra-packages.sh"),
         ]
         _run_podman(command, "pre-flight check of extra_packages")
         try:
