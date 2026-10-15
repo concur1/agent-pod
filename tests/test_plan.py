@@ -23,7 +23,7 @@ def isolated(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir(exist_ok=True)
     monkeypatch.setattr(Path, "cwd", lambda: repo)
-    monkeypatch.setattr("agent_pod.plan.BASE_STATE_DIR", tmp_path / "state")
+    monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")
     return tmp_path
 
 
@@ -37,7 +37,9 @@ def passthrough_config(isolated, monkeypatch):
 
     def _apply(agent: str, **updates):
         cfg = _config_with(agent, **updates)
-        monkeypatch.setattr("agent_pod.plan.get_effective_agent_config", lambda n, _u=None: cfg)
+        monkeypatch.setattr(
+            "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: cfg
+        )
         return cfg
 
     return _apply

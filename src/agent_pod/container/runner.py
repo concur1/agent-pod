@@ -349,15 +349,18 @@ def _ephemeral_env(repo: EphemeralRepo) -> dict[str, str]:
     }
 
 
+def agent_state_dir(agent_name: str, session: str) -> Path:
+    """Host state dir for an agent session: `<state>/<agent>[/<session>]`."""
+    return BASE_STATE_DIR / (agent_name if session == "default" else f"{agent_name}/{session}")
+
+
 def ensure_host_paths(
     agent_name: str,
     config: AgentConfig,
     session: str = "default",
     settings_file: Path | None = None,
 ) -> Path:
-    agent_host_dir = BASE_STATE_DIR / (
-        agent_name if session == "default" else f"{agent_name}/{session}"
-    )
+    agent_host_dir = agent_state_dir(agent_name, session)
     agent_host_dir.mkdir(parents=True, exist_ok=True)
 
     gitconfig = agent_host_dir / ".gitconfig"
@@ -757,6 +760,68 @@ def _fold_mount_into_dir(mount: Mount, parent: Mount) -> None:
         pass  # plan preview must not crash; a runtime error would surface anyway
 
 
+@dataclass(frozen=True)
+class ResolvedRun:
+    """The effective config and mounts for an agent run."""
+
+    config: AgentConfig
+    ephemeral_repo: EphemeralRepo | None
+    mounts: list[Mount]
+
+
+def resolve_run(
+    *,
+    agent_name: str,
+    session: str,
+    profile: str,
+    cwd: Path,
+    user_cfg: ProfileConfig | None = None,
+    context_files: list[FileMount] | None = None,
+    files: list[FileMount] | None = None,
+    ephemeral: bool = False,
+    env: Mapping[str, str] | None = None,
+    settings_file: Path | None = None,
+    prepare_state: bool = False,
+) -> ResolvedRun:
+    """Resolve a run's effective config, state dir, ephemeral repo, and mounts.
+
+    Shared by the runner and `ap plan` so the preview cannot drift from what
+    actually runs. `prepare_state` creates and seeds the host state dir (the
+    runner); `ap plan` leaves the filesystem untouched.
+    """
+    config = get_effective_agent_config(agent_name, user_cfg)
+    if user_cfg is not None:
+        ephemeral = bool(user_cfg.ephemeral)
+    # Profile `context_files` are just additional `files` entries; append them so
+    # mounts, instructions, and pi args all derive from one list.
+    extra_files = [*(files or []), *(context_files or [])]
+    if extra_files:
+        config = config.model_copy(update={"files": [*config.files, *extra_files]})
+
+    host_dir = (
+        ensure_host_paths(agent_name, config, session, settings_file)
+        if prepare_state
+        else agent_state_dir(agent_name, session)
+    )
+
+    ephemeral_repo = repo_workspace(
+        ephemeral=ephemeral,
+        cwd=cwd,
+        branch=f"agent/{profile}/{session}",
+        worktree=f"/sandbox/{get_instance_name(config, session)}",
+    )
+    mounts = build_mounts(
+        agent_name=agent_name,
+        config=config,
+        cwd=cwd,
+        agent_host_dir=host_dir,
+        prompts_dir=BASE_STATE_DIR / "prompts",
+        ephemeral_repo=ephemeral_repo,
+        env=env,
+    )
+    return ResolvedRun(config=config, ephemeral_repo=ephemeral_repo, mounts=mounts)
+
+
 def missing_passthrough_envs(config: AgentConfig, env: Mapping[str, str]) -> list[str]:
     """Declared `passthrough_envs` names that aren't set in `env`."""
     return [entry.name for entry in config.passthrough_envs if entry.name not in env]
@@ -838,17 +903,9 @@ def run_agent(
     `user_cfg` is the resolved config (top-level defaults + active profile
     overrides, see UserConfig.effective); when given it drives the agent config
     (passthrough envs, tmpfs, flake, file mounts...) and `ephemeral`. `files`
-    remains for extra runtime-only mounts (CLI --context-file entries) appended
-    after the config's.
+    remains for extra runtime-only mounts appended after the config's.
     """
     config = get_effective_agent_config(agent_name, user_cfg)
-    if user_cfg is not None:
-        ephemeral = bool(user_cfg.ephemeral)
-    # Profile `context_files` are just additional `files` entries; append them so
-    # mounts, instructions, and pi args all derive from one list.
-    extra_files = [*(files or []), *(context_files or [])]
-    if extra_files:
-        config = config.model_copy(update={"files": [*config.files, *extra_files]})
 
     missing = missing_passthrough_envs(config, os.environ)
     if missing:
@@ -881,11 +938,6 @@ def run_agent(
         logger.warning("settings file not found, falling back to default seed: %s", settings_file)
         settings_file = None
 
-    agent_host_dir = ensure_host_paths(agent_name, config, session, settings_file)
-
-    prompts_dir = BASE_STATE_DIR / "prompts"
-    prompts_dir.mkdir(parents=True, exist_ok=True)
-
     cleanup_stale_container(instance_name)
 
     # Leftover agent branches from crashed or legacy sessions accumulate; sweep
@@ -895,26 +947,24 @@ def run_agent(
 
     build_image(agent_name, config, settings_file)
 
-    # Ephemeral git mode: mount the repo's .git and let the container create its
-    # own per-session worktree on agent/<profile>/<session>, forked from the
-    # current host HEAD. Commits are the only thing that ever reaches the host.
-    # Falls back to the direct /sandbox mount unless enabled in a git repo.
-    ephemeral_repo = repo_workspace(
-        ephemeral=ephemeral,
-        cwd=Path.cwd(),
-        branch=f"agent/{profile}/{session}",
-        worktree=f"/sandbox/{instance_name}",
-    )
-    internal_env = _ephemeral_env(ephemeral_repo) if ephemeral_repo is not None else {}
-
-    mounts = build_mounts(
+    # Assemble the run exactly as `ap plan` previews it: effective config,
+    # per-session state (created + seeded), ephemeral git exposure, and mounts.
+    resolved = resolve_run(
         agent_name=agent_name,
-        config=config,
+        session=session,
+        profile=profile,
         cwd=Path.cwd(),
-        agent_host_dir=agent_host_dir,
-        prompts_dir=prompts_dir,
-        ephemeral_repo=ephemeral_repo,
+        user_cfg=user_cfg,
+        context_files=context_files,
+        files=files,
+        ephemeral=ephemeral,
+        settings_file=settings_file,
+        prepare_state=True,
     )
+    config = resolved.config
+    ephemeral_repo = resolved.ephemeral_repo
+    internal_env = _ephemeral_env(ephemeral_repo) if ephemeral_repo is not None else {}
+    mounts = resolved.mounts
 
     # Launch screen: the same truthful preview `ap plan` renders, built from the
     # exact mounts + envs just handed to podman, so the operator sees what the

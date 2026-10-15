@@ -10,18 +10,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agent_pod.config import get_effective_agent_config
 from agent_pod.container.runner import (
-    BASE_STATE_DIR,
     SECRET_ENV_RE,
     Mount,
     SecurityProfile,
     _ephemeral_env,
-    build_mounts,
-    repo_workspace,
+    resolve_run,
 )
 from agent_pod.types import FileMount, ProfileConfig
-from agent_pod.utils.names import get_instance_name
 
 _RED = "\033[31m"
 _RESET = "\033[0m"
@@ -82,41 +78,29 @@ def build_plan(
     flake, file mounts...) and `ephemeral`. `files` remains for extra
     runtime-only mounts (CLI --context-file entries).
     """
-    config = get_effective_agent_config(agent, user_cfg)
-    if user_cfg is not None:
-        ephemeral = bool(user_cfg.ephemeral)
-    extra_files = [*(files or []), *(context_files or [])]
-    if extra_files:
-        config = config.model_copy(update={"files": [*config.files, *extra_files]})
     env = os.environ if env is None else env
     cwd = Path.cwd() if cwd is None else cwd
-    agent_host_dir = BASE_STATE_DIR / (agent if session == "default" else f"{agent}/{session}")
-    prompts_dir = BASE_STATE_DIR / "prompts"
-    ephemeral_repo = repo_workspace(
-        ephemeral=ephemeral,
-        cwd=cwd,
-        branch=f"agent/{profile}/{session}",
-        worktree=f"/sandbox/{get_instance_name(config, session)}",
-    )
-    mounts = build_mounts(
+    resolved = resolve_run(
         agent_name=agent,
-        config=config,
+        session=session,
+        profile=profile,
         cwd=cwd,
-        agent_host_dir=agent_host_dir,
-        prompts_dir=prompts_dir,
-        ephemeral_repo=ephemeral_repo,
+        user_cfg=user_cfg,
+        context_files=context_files,
+        files=files,
+        ephemeral=ephemeral,
         env=env,
     )
-    envs = build_envs(config, env)
-    if ephemeral_repo is not None:
+    envs = build_envs(resolved.config, env)
+    if resolved.ephemeral_repo is not None:
         envs = [
             EnvVar(name=key, forwarded=False, internal=True)
-            for key in _ephemeral_env(ephemeral_repo)
+            for key in _ephemeral_env(resolved.ephemeral_repo)
         ] + envs
     return Plan(
         agent=agent,
         session=session,
-        mounts=mounts,
+        mounts=resolved.mounts,
         envs=envs,
         # No hardening flags are passed today, so this reflects podman's defaults
         # (see SecurityProfile in runner.py); keep in sync with _podman_command.
