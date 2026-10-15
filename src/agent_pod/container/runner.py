@@ -87,18 +87,12 @@ class EphemeralRepo:
     gitdir_container: str = EPHEMERAL_GITDIR_CONTAINER
 
 
-@dataclass(frozen=True)
-class SecurityProfile:
-    """Network + kernel-capability posture granted to the sandbox container.
-
-    The runner passes no `--network` or `--cap-*` flags, so this reflects
-    podman's defaults. Single source of truth for `ap plan`; if hardening flags
-    are added to `_podman_command`, update this so the preview stays truthful.
-    """
-
-    network: str = "full"  # "full" (default bridge) | "none"
-    host_network: bool = False
-    capabilities: str = "default"  # "default" (no drop) | "drop_all"
+# Network + kernel-capability posture granted to the sandbox container. The
+# runner passes no `--network` or `--cap-*` flags, so these are podman's
+# defaults; keep in sync with `_podman_command` so `ap plan` stays truthful.
+SANDBOX_NETWORK = "full"  # "full" (default bridge) | "none"
+SANDBOX_HOST_NETWORK = False
+SANDBOX_CAPABILITIES = "default"  # "default" (no drop) | "drop_all"
 
 
 def _is_placeholder(content: str) -> bool:
@@ -383,7 +377,6 @@ def _instructions_content(
     context_entries: list[FileMount],
     config: AgentConfig,
     mounts: list[Mount],
-    security: SecurityProfile,
     env: Mapping[str, str],
 ) -> str:
     """The generated AGENTS.md: the bundled skill conventions plus the sandbox's grants.
@@ -434,8 +427,8 @@ def _instructions_content(
         for entry in context_entries:
             lines.append(f"@{CONTEXTS_CONTAINER_DIR}/{entry.name}")
 
-    network = "Full outbound (default bridge)" if security.network == "full" else "No outbound"
-    host_net = "enabled" if security.host_network else "disabled"
+    network = "Full outbound (default bridge)" if SANDBOX_NETWORK == "full" else "No outbound"
+    host_net = "enabled" if SANDBOX_HOST_NETWORK else "disabled"
     lines.extend(["", "## Sandbox access", "", f"{network} network, host network {host_net}.", ""])
 
     lines.extend(["### Installed tools", ""])
@@ -651,7 +644,6 @@ def build_mounts(
                 context_entries,
                 config,
                 mounts,
-                SecurityProfile(),
                 os.environ if env is None else env,
             )
         )
@@ -981,7 +973,6 @@ def run_agent(
         session=session,
         mounts=mounts,
         envs=envs,
-        security=SecurityProfile(),
     )
     print(render_plan(plan, color=color_enabled()))
 

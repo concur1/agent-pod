@@ -7,13 +7,15 @@ flagged `[secret]`, never shown.
 import os
 import sys
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from agent_pod.container.runner import (
+    SANDBOX_CAPABILITIES,
+    SANDBOX_HOST_NETWORK,
+    SANDBOX_NETWORK,
     SECRET_ENV_RE,
     Mount,
-    SecurityProfile,
     _ephemeral_env,
     resolve_run,
 )
@@ -39,7 +41,6 @@ class Plan:
     session: str
     mounts: list[Mount]
     envs: list[EnvVar]
-    security: SecurityProfile = field(default_factory=SecurityProfile)
 
 
 def _display(path: Path | None) -> str:
@@ -102,9 +103,6 @@ def build_plan(
         session=session,
         mounts=resolved.mounts,
         envs=envs,
-        # No hardening flags are passed today, so this reflects podman's defaults
-        # (see SecurityProfile in runner.py); keep in sync with _podman_command.
-        security=SecurityProfile(),
     )
 
 
@@ -173,20 +171,20 @@ def render_plan(plan: Plan, *, color: bool = True) -> str:
             line += f"  · {env.description}"
         lines.append(line)
 
-    lines.extend(_render_security(plan.security, width))
+    lines.extend(_render_security(width))
     return "\n".join(lines)
 
 
-def _render_security(profile: SecurityProfile, width: int) -> list[str]:
-    """Truthful network + capability posture."""
+def _render_security(width: int) -> list[str]:
+    """Truthful network + capability posture (no hardening flags are passed)."""
     network = (
         "Full outbound (default bridge) — no restriction"
-        if profile.network == "full"
+        if SANDBOX_NETWORK == "full"
         else "None — no outbound traffic"
     )
     caps = (
         "podman defaults (root) — no hardening"
-        if profile.capabilities == "default"
+        if SANDBOX_CAPABILITIES == "default"
         else "DROP ALL (no root escalation)"
     )
     return [
@@ -194,6 +192,6 @@ def _render_security(profile: SecurityProfile, width: int) -> list[str]:
         "NETWORK & CAPABILITIES",
         "─" * width,
         f"  {'Network Access':<16}: {network}",
-        f"  {'Host Network':<16}: {'Enabled' if profile.host_network else 'Disabled'}",
+        f"  {'Host Network':<16}: {'Enabled' if SANDBOX_HOST_NETWORK else 'Disabled'}",
         f"  {'Capabilities':<16}: {caps}",
     ]

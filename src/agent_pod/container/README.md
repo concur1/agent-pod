@@ -150,7 +150,7 @@ opt-in, the environment section shows only agent-pod's internal vars plus any
 and `[secret]` on secret-looking names. A final NETWORK & CAPABILITIES section
 states the sandbox's network and capability posture, driven by the runner's
 actual flags (currently none, so it truthfully reports full outbound network
-and podman's default capabilities — see `SecurityProfile` in `runner.py`).
+and podman's default capabilities — see the `SANDBOX_*` constants in `runner.py`).
 The same picture is written into the generated agent instructions: the
 sandbox's mounts (secrets flagged), forwarded env vars with their config
 `description`s, and the network posture, so the agent understands its own
