@@ -105,6 +105,12 @@
 #   - name: MY_API_KEY
 #     description: API key for the my.example service
 
+# Host devices passed into the container with podman `--device`. Opt-in; use it
+# when the agent needs hardware the sandbox does not have (e.g. `/dev/snd` so
+# claude's voice/push-to-talk can record from the host microphone).
+# devices:
+#   - /dev/snd
+
 # Files/dirs to add to the sandbox, in addition to the agent's own `files`.
 # Each entry:
 #   source      — host file/folder, or a `builtin:` generator (`builtin:instructions`,

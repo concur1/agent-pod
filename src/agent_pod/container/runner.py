@@ -855,6 +855,9 @@ def _podman_command(
         else:
             cmd += ["-v", f"{mount.host_path}:{mount.container_path}:{mount.mode},z"]
 
+    for device in config.devices:
+        cmd += ["--device", device]
+
     for entry in config.passthrough_envs:
         if entry.name in env:
             cmd += ["-e", entry.name]

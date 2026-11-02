@@ -39,6 +39,7 @@ The top level of a config file accepts every key below; all but `profile`/`profi
 | `container_name` | `str \| null` | `null` | See AgentConfig.container_name |
 | `container_home` | `str \| null` | `null` | See AgentConfig.container_home |
 | `tmpfs_mounts` | `dict[str, str] \| null` | `null` | See AgentConfig.tmpfs_mounts |
+| `devices` | `list[str] \| null` | `null` | See AgentConfig.devices |
 | `passthrough_envs` | `list[PassthroughEnv] \| null` | `null` | See AgentConfig.passthrough_envs |
 | `prompt` | `str \| null` | `null` | See AgentConfig.prompt — optional custom prompt injected into the generated agent instructions. |
 | `profile` | `str \| null` | `null` | Default profile name for `ap run`/`plan`. |

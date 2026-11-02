@@ -448,6 +448,22 @@ class TestEnvPassthrough:
         assert {"EXAMPLE_TOKEN", "EXAMPLE_SECRET_KEY", "EXAMPLE_PROJECT_ID"} <= passed
 
 
+class TestDevicePassthrough:
+    def test_configured_devices_reach_podman(self, tmp_path, monkeypatch):
+        _patch_prereqs(monkeypatch, tmp_path)
+        cfg = _minimal_config(devices=["/dev/snd"])
+        monkeypatch.setattr(
+            "agent_pod.container.runner.get_effective_agent_config", lambda n, _u=None: cfg
+        )
+        captured = _capture_run(monkeypatch)
+
+        with pytest.raises(SystemExit):
+            run_agent("pi", [])
+
+        args = captured["args"]
+        assert [args[i + 1] for i, arg in enumerate(args) if arg == "--device"] == ["/dev/snd"]
+
+
 class TestOpencodeAuthJson:
     def _run_opencode(self, tmp_path, monkeypatch, config):
         monkeypatch.setattr("agent_pod.container.runner.BASE_STATE_DIR", tmp_path / "state")

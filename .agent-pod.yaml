@@ -9,6 +9,17 @@ profiles:
     agent: pi
   claude:
     agent: claude
+    # Push-to-talk needs the host microphone: /dev/snd is not in the sandbox by default.
+    devices:
+      - /dev/snd
+    files:
+      # claude's settings.json hooks reference $HOME/dotfiles/... paths.
+      - source: ~/dotfiles
+        name: dotfiles
+        target: /root/dotfiles
+        permissions: ro
+        optional: true
+        description: host dotfiles (referenced by claude hook commands)
   skills:
     agent: pi
     files:

@@ -229,6 +229,16 @@ class AgentConfig(BaseModel):
         default_factory=dict,
         description="RAM-backed tmpfs mounts (container_path -> mount_options)",
     )
+    devices: list[str] = Field(
+        default_factory=list,
+        examples=[["/dev/snd"]],
+        description=(
+            "Host devices passed into the sandbox with podman `--device` (e.g. "
+            "`/dev/snd` so a voice/microphone feature can record audio). The "
+            "container's root user owns the recreated nodes, so no group mapping "
+            "is needed. Opt-in: nothing is passed by default."
+        ),
+    )
     passthrough_envs: list[PassthroughEnv] = Field(
         default_factory=list,
         description=(
@@ -394,6 +404,11 @@ class ProfileConfig(BaseModel):
         default=None,
         examples=[{"/tmp": "rw,exec,size=512m"}],
         description="See AgentConfig.tmpfs_mounts",
+    )
+    devices: list[str] | None = Field(
+        default=None,
+        examples=[["/dev/snd"]],
+        description="See AgentConfig.devices",
     )
     passthrough_envs: list[PassthroughEnv] | None = Field(
         default=None,
