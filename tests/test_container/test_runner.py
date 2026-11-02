@@ -638,6 +638,37 @@ class TestWritableHostOutputDir:
         assert reports.kind == "config"
 
 
+class TestEnvVarSources:
+    def test_source_expands_env_vars(self, tmp_path, monkeypatch):
+        host_dir = tmp_path / "pulse"
+        host_dir.mkdir()
+        monkeypatch.setenv("AP_TEST_RUNTIME_DIR", str(tmp_path))
+        config = _config_with(
+            "claude",
+            files=[
+                FileMount(
+                    source="$AP_TEST_RUNTIME_DIR/pulse",
+                    name="runtime-pulse",
+                    target="/run/user/0/pulse",
+                    permissions="rw",
+                )
+            ],
+        )
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+
+        mounts = build_mounts(
+            agent_name="claude",
+            config=config,
+            cwd=tmp_path,
+            agent_host_dir=state_dir,
+            prompts_dir=tmp_path / "prompts",
+        )
+
+        pulse = next(m for m in mounts if m.container_path == "/run/user/0/pulse")
+        assert pulse.host_path == host_dir
+
+
 class TestClaudeSharedConfig:
     def _mounts(self, tmp_path, monkeypatch, session):
         state = tmp_path / "state"

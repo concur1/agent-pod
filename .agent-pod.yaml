@@ -9,9 +9,6 @@ profiles:
     agent: pi
   claude:
     agent: claude
-    # Push-to-talk needs the host microphone: /dev/snd is not in the sandbox by default.
-    devices:
-      - /dev/snd
     # claude's Linux recorder: bundled native module, falling back to arecord
     # (alsa-utils) or rec (sox). Neither is in the base image.
     extra_packages:
@@ -25,6 +22,21 @@ profiles:
         permissions: ro
         optional: true
         description: host dotfiles (referenced by claude hook commands)
+      # Raw /dev/snd capture inside a container records silence (the host's
+      # PipeWire owns the codec), so record through the host audio server: its
+      # socket is at the path PULSE_SERVER names in the claude image.
+      - source: $XDG_RUNTIME_DIR/pulse
+        name: runtime-pulse
+        target: /run/user/0/pulse
+        permissions: rw
+        optional: true
+        description: host PipeWire/PulseAudio socket (microphone)
+      - source: ~/.config/pulse
+        name: config-pulse
+        target: /root/.config/pulse
+        permissions: ro
+        optional: true
+        description: pulse client config and cookie
   skills:
     agent: pi
     files:

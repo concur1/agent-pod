@@ -15,7 +15,14 @@ from agent_pod.config import get_effective_agent_config
 from agent_pod.container.builder import build_image
 from agent_pod.container.cleanup import cleanup_stale_container, container_running
 from agent_pod.skills import load_skill
-from agent_pod.types import SHARED_STATE_DIR, STATE_DIR, AgentConfig, FileMount, ProfileConfig
+from agent_pod.types import (
+    SHARED_STATE_DIR,
+    STATE_DIR,
+    AgentConfig,
+    FileMount,
+    ProfileConfig,
+    expand_host_path,
+)
 from agent_pod.utils.names import get_instance_name, valid_session_name
 
 logger = logging.getLogger(__name__)
@@ -107,7 +114,7 @@ def _seed_source(entry: FileMount, settings_file: Path | None) -> Path | None:
         return settings_file
     if entry.source is None or not entry.seed:
         return None
-    return Path(entry.source).expanduser()
+    return expand_host_path(entry.source)
 
 
 def _ensure_state_file(file_path: Path, seed_src: Path | None) -> None:
@@ -485,7 +492,7 @@ def build_mounts(
     mounts: list[Mount] = []
     mounted_skills: dict[str, str] = {}
     context_entries = [
-        e for e in config.files if e.context and e.source and Path(e.source).expanduser().exists()
+        e for e in config.files if e.context and e.source and expand_host_path(e.source).exists()
     ]
 
     if ephemeral_repo is not None:
@@ -514,7 +521,7 @@ def build_mounts(
     for entry in config.files:
         container_path = config.file_container_path(entry)
         if entry.context:
-            host = Path(entry.source).expanduser() if entry.source else None
+            host = expand_host_path(entry.source) if entry.source else None
             if host is None or not host.exists():
                 if host is not None:
                     _warn_missing(entry, host)
@@ -556,7 +563,7 @@ def build_mounts(
             )
             continue
 
-        host = Path(entry.source).expanduser() if entry.source else None
+        host = expand_host_path(entry.source) if entry.source else None
 
         if entry.permissions == "ro":
             if host is None or not host.exists():
@@ -577,7 +584,7 @@ def build_mounts(
         # Read/write.
         if entry.source is not None and not entry.seed:
             # A writable host path mounted directly (writes flow back to the host).
-            rw_host = Path(entry.source).expanduser()
+            rw_host = expand_host_path(entry.source)
             if not rw_host.exists():
                 if entry.effective_type == "dir":
                     # Writable output dir (e.g. insights reports): create it so the
@@ -600,7 +607,7 @@ def build_mounts(
 
         # Writable state: seeded from the host (or empty), mounted from the state dir.
         state_path = _state_root(agent_name, agent_host_dir, entry) / entry.name
-        seed_host = Path(entry.source).expanduser() if entry.seed and entry.source else None
+        seed_host = expand_host_path(entry.source) if entry.seed and entry.source else None
         mounts.append(
             Mount(
                 host_path=state_path,

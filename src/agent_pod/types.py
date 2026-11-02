@@ -1,9 +1,19 @@
 """Pydantic models for agent configuration validation."""
 
+import os
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+def expand_host_path(source: str) -> Path:
+    """Expand `~` and `$VAR`/`${VAR}` in a config-supplied host path.
+
+    Env expansion lets a config mount host paths that only exist at launch time,
+    e.g. `$XDG_RUNTIME_DIR/pulse` for the host's audio socket.
+    """
+    return Path(os.path.expandvars(source)).expanduser()
 
 
 def deep_merge(base: dict, override: dict) -> dict:
@@ -78,8 +88,9 @@ class FileMount(BaseModel):
             "Host file or folder to mount, or a `builtin:` generator id "
             "(`builtin:instructions`, `builtin:ephemeral-git-workflow`, "
             "`builtin:agent-pod-config`) for content agent-pod "
-            "generates at runtime. Omit for a writable state file/dir with no host "
-            "seed (it is created empty in the session state dir)."
+            "generates at runtime. `~` and `$VAR` are expanded. Omit for a "
+            "writable state file/dir with no host seed (it is created empty in "
+            "the session state dir)."
         ),
     )
     name: str = Field(
@@ -172,7 +183,7 @@ class FileMount(BaseModel):
         if self.seed:
             return "file"
         if self.source:
-            host = Path(self.source).expanduser()
+            host = expand_host_path(self.source)
             if host.exists():
                 return "file" if host.is_file() else "dir"
             return "file" if Path(self.name).suffix else "dir"
