@@ -12,6 +12,11 @@ profiles:
     # Push-to-talk needs the host microphone: /dev/snd is not in the sandbox by default.
     devices:
       - /dev/snd
+    # claude's Linux recorder: bundled native module, falling back to arecord
+    # (alsa-utils) or rec (sox). Neither is in the base image.
+    extra_packages:
+      - alsa-utils
+      - sox
     files:
       # claude's settings.json hooks reference $HOME/dotfiles/... paths.
       - source: ~/dotfiles
