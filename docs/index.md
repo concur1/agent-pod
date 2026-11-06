@@ -30,7 +30,7 @@ The four quadrants of the [Diátaxis](https://diataxis.fr/) model:
 - [**Tutorials**](tutorials/quickstart.md) — learning by doing: first run,
   profiles, and sessions, no prior knowledge assumed.
 - [**How-to guides**](guides/install.md) — task recipes: install, configure,
-  mount files, work in git-heavy repositories, add skills.
+  mount files, pass secrets, work in git-heavy repositories, add skills.
 - [**Reference**](reference/cli.md) — the facts: the command line and the
   config files.
 - [**Explanation**](explanation/design.md) — the big picture: how the sandbox,

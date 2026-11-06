@@ -15,7 +15,8 @@ ap run fixes --context-file ./docs/notes.md --context-file ./docs/api.md:api.md
 
 `--context-file HOST_PATH[:NAME]` is sugar for a `files:` entry with
 `context: true`. For the full `files` schema — permissions, seeding, secrets,
-writable state dirs — see the [config reference](../reference/config.md).
+writable state dirs — see the [config reference](../reference/config.md), and
+[how to pass secrets](secrets.md) for credential files.
 
 You can also declare mounts in your config so every run gets them:
 

@@ -12,6 +12,7 @@ nav = [
     "guides/install.md",
     "guides/config.md",
     "guides/mounts.md",
+    "guides/secrets.md",
     "guides/git.md",
     "guides/skills.md",
     "guides/recipes.md",
