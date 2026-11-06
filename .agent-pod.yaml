@@ -15,12 +15,13 @@ profiles:
       - alsa-utils
       - sox
     files:
-      # claude's settings.json hooks reference $HOME/dotfiles/... paths.
+      # claude's settings.json hooks reference $HOME/dotfiles/... paths. Not
+      # optional: a missing source is warned about, so a silently absent
+      # /root/dotfiles cannot break hooks with a bare "No such file".
       - source: ~/dotfiles
         name: dotfiles
         target: /root/dotfiles
         permissions: ro
-        optional: true
         description: host dotfiles (referenced by claude hook commands)
       # Raw /dev/snd capture inside a container records silence (the host's
       # PipeWire owns the codec), so record through the host audio server: its
